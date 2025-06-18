@@ -171,7 +171,10 @@ class ModelConfig:
             if self.model_id is None or self.origin_file_pattern is None:
                 raise ValueError(f"""No valid model files. Please use `ModelConfig(path="xxx")` or `ModelConfig(model_id="xxx/yyy", origin_file_pattern="zzz")`.""")
             if not skip_download:
-                downloaded_files = glob.glob(self.origin_file_pattern, root_dir=os.path.join(local_model_path, self.model_id))
+                # downloaded_files = glob.glob(self.origin_file_pattern, root_dir=os.path.join(local_model_path, self.model_id))
+                pattern = os.path.join(local_model_path, self.model_id, self.origin_file_pattern)
+                downloaded_files = glob.glob(pattern)
+
                 snapshot_download(
                     self.model_id,
                     local_dir=os.path.join(local_model_path, self.model_id),

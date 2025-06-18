@@ -1,0 +1,8 @@
+models/
+**/__pycache__/**
+diffsynth.egg-info/
+data/
+exp/
+output/
+.mv
+.msc
