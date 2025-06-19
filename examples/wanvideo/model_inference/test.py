@@ -119,26 +119,26 @@ pipe.enable_vram_management()
 #     seed=1, tiled=True
 # )
 
-# # Depth video + Reference image -> Video
-# control_video = VideoData("data/examples/wan/depth_video.mp4", height=480, width=832)
-# num_frames = len(control_video)
-# video = pipe(
-#     prompt="两只可爱的橘猫戴上拳击手套，站在一个拳击台上搏斗。",
-#     negative_prompt="色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
-#     vace_video=control_video,
-#     vace_reference_image=Image.open("data/examples/wan/cat_fightning.jpg").resize((832, 480)),
-#     seed=1, tiled=True, num_frames=num_frames
-# )
-# save_video(video, os.path.join(save_folder, "example_video_dataset.mp4"), fps=15, quality=5)
-
-# reference to video 
-control_video = VideoData("data/example_video_dataset/video1_softedge.mp4", height=480, width=832)
+# Depth video + Reference image -> Video
+control_video = VideoData("data/examples/wan/depth_video.mp4", height=480, width=832)
 num_frames = len(control_video)
 video = pipe(
-    prompt="from sunset to night, a small town, light, house, river",
+    prompt="两只可爱的橘猫戴上拳击手套，站在一个拳击台上搏斗。",
     negative_prompt="色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
     vace_video=control_video,
-    vace_reference_image=Image.open("data/example_video_dataset/reference_image.png").resize((832, 480)),
+    vace_reference_image=Image.open("data/examples/wan/cat_fightning.jpg").resize((832, 480)),
     seed=1, tiled=True, num_frames=num_frames
 )
-save_video(video, os.path.join(save_folder, "example_video_dataset2.mp4"), fps=15, quality=5)
+save_video(video, os.path.join(save_folder, "example_video_dataset.mp4"), fps=15, quality=5)
+
+# # reference to video 
+# control_video = VideoData("data/example_video_dataset/video1_softedge.mp4", height=480, width=832)
+# num_frames = len(control_video)
+# video = pipe(
+#     prompt="from sunset to night, a small town, light, house, river",
+#     negative_prompt="色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+#     vace_video=control_video,
+#     vace_reference_image=Image.open("data/example_video_dataset/reference_image.png").resize((832, 480)),
+#     seed=1, tiled=True, num_frames=num_frames
+# )
+# save_video(video, os.path.join(save_folder, "example_video_dataset2.mp4"), fps=15, quality=5)

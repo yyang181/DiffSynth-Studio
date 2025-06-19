@@ -109,6 +109,21 @@ if __name__ == "__main__":
     parser = wan_parser()
     args = parser.parse_args()
     dataset = VideoDataset(args=args)
+
+    if args.use_swanlab:
+        import swanlab
+        exp_name = args.output_path.split(os.sep)[-1]
+        swanlab_config = {"UPPERFRAMEWORK": "DiffSynth-Studio"}
+        swanlab_config.update(vars(args))
+
+        swanlab.init(
+            project="DiffSynth-Studio",
+            name=exp_name,
+            config=swanlab_config,
+            mode=args.swanlab_mode,  # eg. "online", "offline", "disabled"
+            logdir=os.path.join(args.output_path, "swanlog")
+        )
+    
     model = WanTrainingModule(
         model_paths=args.model_paths,
         model_id_with_origin_paths=args.model_id_with_origin_paths,

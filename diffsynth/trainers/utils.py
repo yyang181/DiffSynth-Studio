@@ -4,7 +4,7 @@ from PIL import Image
 import pandas as pd
 from tqdm import tqdm
 from accelerate import Accelerator
-
+import swanlab
 
 
 class VideoDataset(torch.utils.data.Dataset):
@@ -223,8 +223,18 @@ class ModelLogger:
         self.remove_prefix_in_ckpt = remove_prefix_in_ckpt
         
     
-    def on_step_end(self, loss):
-        pass
+    def on_step_end(self, accelerator, loss, step_id, epoch_id, scheduler=None):
+        # Print the loss for the current step
+        # This is where you can also log the loss to a file or a logging system
+        # print(loss.item())
+        # # add swanlab log 
+        if accelerator.is_main_process:
+            swanlab.log({
+                "train/loss": loss.item(),
+                "lr": scheduler.get_last_lr()[0],
+                "epoch": epoch_id,
+                "step": step_id,
+            })
     
     
     def on_epoch_end(self, accelerator, model, epoch_id):
@@ -251,15 +261,22 @@ def launch_training_task(
     accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
     model, optimizer, dataloader, scheduler = accelerator.prepare(model, optimizer, dataloader, scheduler)
     
+    step_id = 0
     for epoch_id in range(num_epochs):
-        for data in tqdm(dataloader):
-            with accelerator.accumulate(model):
-                optimizer.zero_grad()
-                loss = model(data)
-                accelerator.backward(loss)
-                optimizer.step()
-                model_logger.on_step_end(loss)
-                scheduler.step()
+        with tqdm(dataloader, desc=f"Epoch {epoch_id + 1}/{num_epochs}, Step {step_id}") as pbar:
+            for data in pbar:
+                step_id += 1
+                with accelerator.accumulate(model):
+                    optimizer.zero_grad()
+                    loss = model(data)
+                    accelerator.backward(loss)
+                    optimizer.step()
+                    model_logger.on_step_end(accelerator, loss, step_id, epoch_id, scheduler=scheduler)
+                    scheduler.step()
+                    
+                # 更新 tqdm 的显示内容
+                pbar.set_postfix(loss=loss.item())
+        
         model_logger.on_epoch_end(accelerator, model, epoch_id)
 
 
@@ -300,5 +317,13 @@ def wan_parser():
     parser.add_argument("--extra_inputs", default=None, help="Additional model inputs, comma-separated.")
     parser.add_argument("--use_gradient_checkpointing_offload", default=False, action="store_true", help="Whether to offload gradient checkpointing to CPU memory.")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps.")
+    parser.add_argument("--use_swanlab",default=False,action="store_true",help="Whether to use SwanLab logger.",)
+    parser.add_argument("--swanlab_mode", default=None, help="SwanLab mode (cloud or local).",)
+    parser.add_argument(
+        "--use_data_pt",
+        default=False,
+        action="store_true",
+        help="Whether to use SwanLab logger.",
+    )
     return parser
 
