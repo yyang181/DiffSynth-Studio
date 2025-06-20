@@ -37,4 +37,4 @@ accelerate launch --mixed_precision=bf16 \
   --extra_inputs "vace_video,vace_reference_image" \
   --use_gradient_checkpointing_offload \
   --use_swanlab \
-  --swanlab_mode cloud
+  --swanlab_mode local
