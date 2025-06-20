@@ -257,11 +257,25 @@ def launch_training_task(
     num_epochs: int = 1,
     gradient_accumulation_steps: int = 1,
     use_data_pt: str = None,
+    args=None,
 ):
     dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, collate_fn=lambda x: x[0])
-    accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
+    accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, log_with="swanlab" if args.use_swanlab else None,)
     model, optimizer, dataloader, scheduler = accelerator.prepare(model, optimizer, dataloader, scheduler)
     
+    if args.use_swanlab:
+        import swanlab
+        exp_name = args.output_path.split(os.sep)[-1]
+        swanlab_config = {"UPPERFRAMEWORK": "DiffSynth-Studio"}
+        swanlab_config.update(vars(args))
+
+        # Initialise your swanlab experiment, passing swanlab parameters and any config information
+        accelerator.init_trackers(
+            project_name="DiffSynth-Studio",
+            config=swanlab_config,
+            init_kwargs={"swanlab": {"experiment_name": exp_name}}
+            )
+
     step_id = 0
     for epoch_id in range(num_epochs):
         with tqdm(dataloader, desc=f"Epoch {epoch_id + 1}/{num_epochs}, Step {step_id}") as pbar:
@@ -279,6 +293,8 @@ def launch_training_task(
                 pbar.set_postfix(loss=loss.item())
         
         model_logger.on_epoch_end(accelerator, model, epoch_id)
+    
+    accelerator.end_training()
 
 
 

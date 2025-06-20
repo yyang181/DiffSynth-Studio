@@ -187,4 +187,5 @@ if __name__ == "__main__":
             num_epochs=args.num_epochs,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             use_data_pt=args.use_data_pt,
+            args=args,
         )
