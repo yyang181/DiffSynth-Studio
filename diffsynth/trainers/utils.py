@@ -229,7 +229,13 @@ class ModelLogger:
         # print(loss.item())
         # # add swanlab log 
         if accelerator.is_main_process:
-            swanlab.log({
+            # swanlab.log({
+            #     "train/loss": loss.item(),
+            #     "lr": scheduler.get_last_lr()[0],
+            #     "epoch": epoch_id,
+            #     "step": step_id,
+            # })
+            accelerator.log({
                 "train/loss": loss.item(),
                 "lr": scheduler.get_last_lr()[0],
                 "epoch": epoch_id,
@@ -263,7 +269,7 @@ def launch_training_task(
     accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, log_with="swanlab" if args.use_swanlab else None,)
     model, optimizer, dataloader, scheduler = accelerator.prepare(model, optimizer, dataloader, scheduler)
     
-    if args.use_swanlab:
+    if args.use_swanlab and accelerator.is_main_process:
         import swanlab
         exp_name = args.output_path.split(os.sep)[-1]
         swanlab_config = {"UPPERFRAMEWORK": "DiffSynth-Studio"}
@@ -273,7 +279,7 @@ def launch_training_task(
         accelerator.init_trackers(
             project_name="DiffSynth-Studio",
             config=swanlab_config,
-            init_kwargs={"swanlab": {"experiment_name": exp_name}}
+            init_kwargs={"swanlab": {"experiment_name": exp_name, "mode": args.swanlab_mode}},
             )
 
     step_id = 0
