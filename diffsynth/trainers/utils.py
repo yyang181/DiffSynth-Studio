@@ -260,6 +260,21 @@ def launch_training_task(
 ):
     dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, collate_fn=lambda x: x[0])
     accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
+
+        if args.use_swanlab:
+        import swanlab
+        exp_name = args.output_path.split(os.sep)[-1]
+        swanlab_config = {"UPPERFRAMEWORK": "DiffSynth-Studio"}
+        swanlab_config.update(vars(args))
+
+        swanlab.init(
+            project="DiffSynth-Studio",
+            name=exp_name,
+            config=swanlab_config,
+            mode=args.swanlab_mode,  # eg. "online", "offline", "disabled"
+            logdir=os.path.join(args.output_path, "swanlog")
+        )
+    
     model, optimizer, dataloader, scheduler = accelerator.prepare(model, optimizer, dataloader, scheduler)
     
     step_id = 0
