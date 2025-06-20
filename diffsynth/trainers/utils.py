@@ -256,6 +256,7 @@ def launch_training_task(
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     num_epochs: int = 1,
     gradient_accumulation_steps: int = 1,
+    use_data_pt: str = None,
 ):
     dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, collate_fn=lambda x: x[0])
     accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
@@ -264,11 +265,11 @@ def launch_training_task(
     step_id = 0
     for epoch_id in range(num_epochs):
         with tqdm(dataloader, desc=f"Epoch {epoch_id + 1}/{num_epochs}, Step {step_id}") as pbar:
-            for data in pbar:
+            for data_id, data in enumerate(pbar):
                 step_id += 1
                 with accelerator.accumulate(model):
                     optimizer.zero_grad()
-                    loss = model(data)
+                    loss = model(data) if use_data_pt is None else model.forward(data, inputs=torch.load(os.path.join(use_data_pt, f"{data_id}.pth"), map_location="cpu"))
                     accelerator.backward(loss)
                     optimizer.step()
                     model_logger.on_step_end(accelerator, loss, step_id, epoch_id, scheduler=scheduler)
@@ -290,7 +291,7 @@ def launch_data_process_task(model: DiffusionTrainingModule, dataset, output_pat
         with torch.no_grad():
             inputs = model.forward_preprocess(data)
             inputs = {key: inputs[key] for key in model.model_input_keys if key in inputs}
-            torch.save(inputs, os.path.join(output_path, "data_cache", f"{data_id}.pth"))
+            torch.save(inputs, os.path.join(output_path, f"{data_id}.pth"))
 
 
 
@@ -319,11 +320,7 @@ def wan_parser():
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps.")
     parser.add_argument("--use_swanlab",default=False,action="store_true",help="Whether to use SwanLab logger.",)
     parser.add_argument("--swanlab_mode", default=None, help="SwanLab mode (cloud or local).",)
-    parser.add_argument(
-        "--use_data_pt",
-        default=False,
-        action="store_true",
-        help="Whether to use SwanLab logger.",
-    )
+    parser.add_argument("--data_process",default=False,action="store_true",help="Whether to use SwanLab logger.",)
+    parser.add_argument("--use_data_pt",default=None,help="Whether to use SwanLab logger.",)
     return parser
 

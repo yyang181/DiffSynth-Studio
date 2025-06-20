@@ -1,6 +1,6 @@
 import torch, os, json
 from diffsynth.pipelines.wan_video_new import WanVideoPipeline, ModelConfig
-from diffsynth.trainers.utils import DiffusionTrainingModule, VideoDataset, ModelLogger, launch_training_task, wan_parser
+from diffsynth.trainers.utils import DiffusionTrainingModule, VideoDataset, ModelLogger, launch_training_task, wan_parser, launch_data_process_task
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
@@ -58,6 +58,7 @@ class WanTrainingModule(DiffusionTrainingModule):
         self.use_gradient_checkpointing_offload = use_gradient_checkpointing_offload
         self.extra_inputs = extra_inputs.split(",") if extra_inputs is not None else []
         
+        self.model_input_keys = ['input_video', 'height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'vace_video', 'vace_reference_image', 'noise', 'latents', 'input_latents', 'vace_context', 'prompt', 'context']
         
     def forward_preprocess(self, data):
         # CFG-sensitive parameters
@@ -92,9 +93,40 @@ class WanTrainingModule(DiffusionTrainingModule):
             else:
                 inputs_shared[extra_input] = data[extra_input]
         
+        if 0:
+            print(f"Input video size: {inputs_shared['input_video'][0].size}")
+            print(f"Input video num frames: {inputs_shared['num_frames']}")
+            print(f"Input video height: {inputs_shared['height']}")
+            print(f"Input video width: {inputs_shared['width']}")
+            for extra_input in self.extra_inputs:
+                # check if extra_input is image or list of images
+                if extra_input in inputs_shared:
+                    if isinstance(inputs_shared[extra_input], list):
+                        print(f"Extra input {extra_input}: {[img.size for img in inputs_shared[extra_input]]}")
+                    elif isinstance(inputs_shared[extra_input], torch.Tensor):
+                        print(f"Extra input {extra_input}: {inputs_shared[extra_input].size()}")
+                    else:
+                        print(f"Extra input {extra_input}: {inputs_shared[extra_input]}")
+            assert 0
+
+            # Input video size: (832, 480) 
+            # Input video num frames: 49       
+            # Input video height: 480 
+            # Input video width: 832 
+            # Extra input vace_video: [(832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480)]
+            # Extra input vace_reference_image: <PIL.Image.Image image mode=RGB size=832x480 at 0x7FB27AF4A460>
+
+            # print(inputs_shared.keys(), inputs_posi.keys(), inputs_nega.keys());assert 0 # 
+            # dict_keys(['input_video', 'height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'vace_video', 'vace_reference_image']) dict_keys(['prompt']) dict_keys([])
+
+
         # Pipeline units will automatically process the input parameters.
         for unit in self.pipe.units:
             inputs_shared, inputs_posi, inputs_nega = self.pipe.unit_runner(unit, self.pipe, inputs_shared, inputs_posi, inputs_nega)
+
+        # print(inputs_shared.keys(), inputs_posi.keys(), inputs_nega.keys());assert 0 # 
+        # dict_keys(['input_video', 'height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'vace_video', 'vace_reference_image', 'noise', 'latents', 'input_latents', 'vace_context']) dict_keys(['prompt', 'context']) dict_keys(['context'])
+
         return {**inputs_shared, **inputs_posi}
     
     
@@ -140,8 +172,19 @@ if __name__ == "__main__":
     )
     optimizer = torch.optim.AdamW(model.trainable_modules(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer)
-    launch_training_task(
-        dataset, model, model_logger, optimizer, scheduler,
-        num_epochs=args.num_epochs,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-    )
+
+    assert not (args.use_data_pt is not None and args.data_process), \
+        "You must choose one of --use_data_pt or --data_process, not both."
+        
+    if args.data_process:
+        # Launch data processing task
+        launch_data_process_task(
+            model, dataset, args.output_path
+        )
+    else:
+        launch_training_task(
+            dataset, model, model_logger, optimizer, scheduler,
+            num_epochs=args.num_epochs,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            use_data_pt=args.use_data_pt,
+        )
