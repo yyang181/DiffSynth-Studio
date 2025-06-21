@@ -30,7 +30,7 @@ def run_inference(checkpoint_path):
         torch_dtype=torch.bfloat16,
         device="cuda",
         model_configs=[
-            ModelConfig(path=['models/iic/VACE-Wan2.1-1.3B-Preview/diffusion_pytorch_model.safetensors', checkpoint_path], offload_device="cpu"),
+            ModelConfig(path=['models/Wan-AI/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors', checkpoint_path], offload_device="cpu"),
             ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="models_t5_umt5-xxl-enc-bf16.pth", offload_device="cpu"),
             ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="Wan2.1_VAE.pth", offload_device="cpu"),
         ],
@@ -66,7 +66,7 @@ if __name__ == "__main__":
         ckpt_files = [
             os.path.join(ckpt_path, f)
             for f in os.listdir(ckpt_path)
-            if f.endswith(".safetensors") and "epoch-" in f
+            if f.endswith(".safetensors") and "epoch-" in f and not f.startswith(".")
         ]
         ckpt_files.sort(key=lambda x: extract_epoch_number(os.path.basename(x)), reverse=True)
 

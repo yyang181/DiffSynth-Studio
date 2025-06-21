@@ -417,8 +417,8 @@ class WanVideoPipeline(BasePipeline):
         # Redirect model path
         if redirect_common_files:
             redirect_dict = {
-                "models_t5_umt5-xxl-enc-bf16.pth": "Wan-AI/Wan2.1-T2V-1.3B",
-                "Wan2.1_VAE.pth": "Wan-AI/Wan2.1-T2V-1.3B",
+                "models_t5_umt5-xxl-enc-bf16.pth": "Wan-AI/Wan2.1-VACE-1.3B",
+                "Wan2.1_VAE.pth": "Wan-AI/Wan2.1-VACE-1.3B",
                 "models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth": "Wan-AI/Wan2.1-I2V-14B-480P",
             }
             for model_config in model_configs:

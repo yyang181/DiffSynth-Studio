@@ -17,4 +17,7 @@ which python
 nvidia-smi
 
 # 训练命令
-torchrun --standalone --nproc_per_node=1 examples/wanvideo/model_inference/test_batch.py --checkpoint exp/train/Wan2.1-VACE-1.3B_full_4gpu_datapth
+/HOME/paratera_xy/pxy545/miniconda3/envs/diffsynth/bin/torchrun \
+--standalone --nproc_per_node=1 \
+examples/wanvideo/model_inference/test_batch.py \
+--checkpoint exp/train/Wan2.1-VACE-1.3B_full_4gpu_datapth
