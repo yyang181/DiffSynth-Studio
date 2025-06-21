@@ -1,10 +1,504 @@
 import imageio, os, torch, warnings, torchvision, argparse
 from peft import LoraConfig, inject_adapter_in_model
-from PIL import Image
+from PIL import Image, ImageFilter
 import pandas as pd
 from tqdm import tqdm
 from accelerate import Accelerator
 import swanlab
+import glob
+import cv2
+from torchvision.transforms import v2
+import os
+import numpy as np
+from einops import rearrange
+import random
+import pickle
+from io import BytesIO
+import torch.nn.functional as F
+import torchvision.transforms as T
+import  torch.nn  as nn
+from decord import VideoReader, cpu
+import traceback
+
+
+# realesrgan 
+import yaml
+from basicsr.data.degradations import circular_lowpass_kernel, random_mixed_kernels
+from basicsr.data.transforms import augment
+from basicsr.utils import FileClient, get_root_logger, imfrombytes, img2tensor
+from basicsr.utils.registry import DATASET_REGISTRY
+from torch.utils import data as data
+from utils.seed import reseed
+from utils.util import to_device, to_numpy, to_item
+import math
+
+# BasicSR
+from basicsr.utils import DiffJPEG, USMSharp
+from basicsr.utils.img_process_util import filter2D
+from basicsr.data.degradations import random_add_gaussian_noise_pt, random_add_poisson_noise_pt
+from basicsr.data.transforms import paired_random_crop
+from torchviz import make_dot
+import decord
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+decord.bridge.set_bridge('torch')
+
+class SR_VideoDataset(torch.utils.data.Dataset):
+    def __init__(self, args):
+        # metadata = pd.read_csv(metadata_path)
+        # self.path = [os.path.join(base_path, "train", file_name) for file_name in metadata["file_name"]]
+        # self.text = metadata["text"].to_list()
+        self.max_num_frames = 81
+        self.frame_interval = 2
+        self.num_frames = args.num_frames
+        self.height = args.height
+        self.width = args.width
+        self.is_i2v = False
+        self.steps_per_epoch = 1
+        self.image_file_extension=("jpg", "jpeg", "png", "webp")
+        self.video_file_extension=("mp4", "avi", "mov", "wmv", "mkv", "flv", "webm")
+        self.repeat = args.dataset_repeat
+
+        self.SR_dataset = True
+        self.sample_fps = self.frame_interval
+        self.max_frames = self.max_num_frames
+        self.misc_size = [self.height, self.width]
+        self.video_list = []
+
+        config_path = args.degradation_config_path
+        ### real-esrgan settings
+        # blur settings for the first degradation
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        # print(config)
+        degradation = config['degradation']
+        self.degradation_params = config['degradation_params']
+
+        self.blur_kernel_size = degradation['blur_kernel_size']
+        self.kernel_list = degradation['kernel_list']
+        self.kernel_prob = degradation['kernel_prob']  # a list for each kernel probability
+        self.blur_sigma = degradation['blur_sigma']
+        self.betag_range = degradation['betag_range']  # betag used in generalized Gaussian blur kernels
+        self.betap_range = degradation['betap_range']  # betap used in plateau blur kernels
+        self.sinc_prob = degradation['sinc_prob']  # the probability for sinc filters
+
+        # blur settings for the second degradation
+        self.blur_kernel_size2 = degradation['blur_kernel_size2']
+        self.kernel_list2 = degradation['kernel_list2']
+        self.kernel_prob2 = degradation['kernel_prob2']
+        self.blur_sigma2 = degradation['blur_sigma2']
+        self.betag_range2 = degradation['betag_range2']
+        self.betap_range2 = degradation['betap_range2']
+        self.sinc_prob2 = degradation['sinc_prob2']
+        # print(self.sinc_prob2);assert 0
+        
+        # a final sinc filter
+        self.final_sinc_prob = degradation['final_sinc_prob']
+
+        self.kernel_range = [2 * v + 1 for v in range(3, 11)]  # kernel size ranges from 7 to 21
+        # TODO: kernel range is now hard-coded, should be in the configure file
+        self.pulse_tensor = torch.zeros(21, 21).float()  # convolving with pulse tensor brings no blurry effect
+        self.pulse_tensor[10, 10] = 1
+        
+
+        ### read csv file
+        metadata_path = args.dataset_metadata_path
+        df = pd.read_csv(metadata_path)
+        self.csv_caption_data = df
+
+        # # text promt
+        # video_path = '/gemini/code/yyx/data/OpenVidHD/videos/3vuHE5QEn1k_18_50to186.mp4'
+        # video_name = os.path.basename(video_path)
+        # caption = df[df['video'] == video_name]['caption'].values
+        # print(caption);assert 0
+
+        # read all mp4 files
+        abs_base_path = os.path.abspath(args.dataset_base_path)
+        self.pose_dir = os.path.join(abs_base_path, "videos")
+        search_pattern = os.path.join(abs_base_path, "videos", '*.mp4')
+        mp4_files = sorted([mp4 for mp4 in glob.glob(search_pattern, recursive=True) if not mp4.startswith(".")])
+        mp4_files_absolute = [os.path.abspath(mp4_file) for mp4_file in mp4_files]
+        file_dict = {os.path.basename(mp4_file): mp4_file for mp4_file in mp4_files_absolute}
+
+        # # 读取 CSV 文件
+        # video_list = []
+        # caption_list = []
+        # df = pd.read_csv(metadata_path)
+        # len_df = len(df)
+        # for index, row in df.iterrows():
+        #     # video_list.append(row["video"])
+        #     video_list.append(file_dict[row["video"]])
+        #     caption_list.append(row["caption"])
+        # self.video_list = video_list
+        # self.caption_list = caption_list
+        # print('len_df:', len_df, 'len_videos:', len(video_list), 'len_captions:', len(caption_list))
+        # assert len(video_list) == len(caption_list)
+
+
+        # self.pose_dir = os.path.join(base_path, "videos")
+        # file_list = [mp4 for mp4 in os.listdir(self.pose_dir) if mp4.endswith(".mp4") and not mp4.startswith(".")]
+        # print("!!! all dataset length (OpenVidHD): ", len(file_list))
+        # # 
+        # for iii_index in file_list:
+        #     self.video_list.append(os.path.join(self.pose_dir,iii_index))
+
+        self.video_list = mp4_files
+
+        self.use_pose = True
+        print("!!! dataset length: ", len(self.video_list))
+
+        # random.shuffle(self.video_list)
+            
+        self.frame_process = v2.Compose([
+            # v2.CenterCrop(size=(height, width)), 
+            v2.Resize(size=(self.height, self.width), antialias=True),
+            v2.ToTensor(),
+            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ])
+
+    def resize(self, image):
+        width, height = image.size
+        # 
+        image = torchvision.transforms.functional.resize(
+            image,
+            (self.height, self.width),
+            interpolation=torchvision.transforms.InterpolationMode.BILINEAR
+        )
+        # return torch.from_numpy(np.array(image))
+        return image
+        
+    def crop_and_resize(self, image):
+        width, height = image.size
+        scale = max(self.width / width, self.height / height)
+        image = torchvision.transforms.functional.resize(
+            image,
+            (round(height*scale), round(width*scale)),
+            interpolation=torchvision.transforms.InterpolationMode.BILINEAR
+        )
+        return image
+
+
+    def load_frames_using_imageio(self, file_path, max_num_frames, start_frame_id, interval, num_frames, frame_process):
+        reader = imageio.get_reader(file_path)
+        if reader.count_frames() < max_num_frames or reader.count_frames() - 1 < start_frame_id + (num_frames - 1) * interval:
+            reader.close()
+            return None
+        
+        frames = []
+        first_frame = None
+        for frame_id in range(num_frames):
+            frame = reader.get_data(start_frame_id + frame_id * interval)
+            frame = Image.fromarray(frame)
+            frame = self.crop_and_resize(frame)
+            if first_frame is None:
+                first_frame = np.array(frame)
+            frame = frame_process(frame)
+            frames.append(frame)
+        reader.close()
+
+        frames = torch.stack(frames, dim=0)
+        frames = rearrange(frames, "T C H W -> C T H W")
+
+        if self.is_i2v:
+            return frames, first_frame
+        else:
+            return frames
+
+
+    def load_video(self, file_path):
+        start_frame_id = torch.randint(0, self.max_num_frames - (self.num_frames - 1) * self.frame_interval, (1,))[0]
+        frames = self.load_frames_using_imageio(file_path, self.max_num_frames, start_frame_id, self.frame_interval, self.num_frames, self.frame_process)
+        return frames
+    
+
+    def load_image(self, file_path):
+        image = Image.open(file_path).convert("RGB")
+        image = self.crop_and_resize(image, *self.get_height_width(image))
+        return image
+    
+    def is_image(self, file_path):
+        file_ext_name = file_path.split(".")[-1]
+        return file_ext_name.lower() in self.image_file_extension
+    
+    def is_video(self, file_path):
+        file_ext_name = file_path.split(".")[-1]
+        return file_ext_name.lower() in self.video_file_extension
+    
+    
+    def load_data(self, file_path):
+        if self.is_image(file_path):
+            return self.load_image(file_path)
+        elif self.is_video(file_path):
+            return self.load_video(file_path)
+        else:
+            return None
+
+    def RealESRGAN_degradation(self):
+        ### RealESRGAN degradation
+        degradation_params = self.degradation_params
+        first_degradation_seed = np.random.randint(2147483647)
+        reseed(first_degradation_seed)
+        # ------------------------ Generate kernels (used in the first degradation) ------------------------ #
+        kernel_size = random.choice(self.kernel_range)
+        if np.random.uniform() < self.sinc_prob:
+            # this sinc filter setting is for kernels ranging from [7, 21]
+            if kernel_size < 13:
+                omega_c = np.random.uniform(np.pi / 3, np.pi)
+            else:
+                omega_c = np.random.uniform(np.pi / 5, np.pi)
+            kernel = circular_lowpass_kernel(omega_c, kernel_size, pad_to=False)
+        else:
+            kernel = random_mixed_kernels(
+                self.kernel_list,
+                self.kernel_prob,
+                kernel_size,
+                self.blur_sigma,
+                self.blur_sigma, [-math.pi, math.pi],
+                self.betag_range,
+                self.betap_range,
+                noise_range=None)
+        # pad kernel
+        pad_size = (21 - kernel_size) // 2
+        self.kernel = np.pad(kernel, ((pad_size, pad_size), (pad_size, pad_size)))
+
+        second_degradation_seed = np.random.randint(2147483647)
+        reseed(second_degradation_seed)
+        # ------------------------ Generate kernels (used in the second degradation) ------------------------ #
+        kernel_size = random.choice(self.kernel_range)
+        if np.random.uniform() < self.sinc_prob2:
+            if kernel_size < 13:
+                omega_c = np.random.uniform(np.pi / 3, np.pi)
+            else:
+                omega_c = np.random.uniform(np.pi / 5, np.pi)
+            kernel2 = circular_lowpass_kernel(omega_c, kernel_size, pad_to=False)
+        else:
+            kernel2 = random_mixed_kernels(
+                self.kernel_list2,
+                self.kernel_prob2,
+                kernel_size,
+                self.blur_sigma2,
+                self.blur_sigma2, [-math.pi, math.pi],
+                self.betag_range2,
+                self.betap_range2,
+                noise_range=None)
+
+        # pad kernel
+        pad_size = (21 - kernel_size) // 2
+        self.kernel2 = np.pad(kernel2, ((pad_size, pad_size), (pad_size, pad_size)))
+
+        final_sinc_seed = np.random.randint(2147483647)
+        reseed(final_sinc_seed)
+        # ------------------------------------- the final sinc kernel ------------------------------------- #
+        if np.random.uniform() < self.final_sinc_prob:
+            kernel_size = random.choice(self.kernel_range)
+            omega_c = np.random.uniform(np.pi / 3, np.pi)
+            sinc_kernel = circular_lowpass_kernel(omega_c, kernel_size, pad_to=21)
+            self.sinc_kernel = torch.FloatTensor(sinc_kernel).contiguous()
+        else:
+            self.sinc_kernel = self.pulse_tensor
+
+        self.kernel = torch.FloatTensor(self.kernel).contiguous()
+        self.kernel2 = torch.FloatTensor(self.kernel2).contiguous()
+
+        degradation_kernels = {
+            'kernel1': self.kernel,
+            'kernel2': self.kernel2,
+            'sinc_kernel': self.sinc_kernel,
+            }
+        return degradation_kernels
+
+    # def __getitem__(self, data_id):
+    def __getitem__(self, index):
+        ### RealESRGAN degradation
+        degradation_kernels = self.RealESRGAN_degradation()
+
+        index = index % len(self.video_list)
+        success=False
+        for _try in range(5):
+            try:
+                if _try >0:
+                    
+                    index = random.randint(1,len(self.video_list))
+                    index = index % len(self.video_list)
+                
+                clean = True
+                path_dir = self.video_list[index]
+
+                # get all frames
+                # print(path_dir);assert 0 # /gemini/code/yyx/data/OpenVidHD/videos/3vuHE5QEn1k_18_50to186.mp4
+                vr = VideoReader(path_dir)
+                frames = vr.get_batch(range(len(vr)))  # 获取所有帧，返回的是 NDArray，形状为 [T, H, W, 3]
+                
+                # image = frames.permute(0, 3, 1, 2).contiguous() / 255.0
+
+                del vr
+                # print(frames.shape);assert 0 # (272, 1080, 1920, 3)
+
+                frames_all = [Image.fromarray(frame.byte().cpu().numpy()) for frame in frames]
+                dwpose_all = [Image.fromarray(frame.byte().cpu().numpy()) for frame in frames]
+
+                ### video caption
+                video_name = os.path.basename(path_dir)
+                caption = self.csv_caption_data[self.csv_caption_data['video'] == video_name]['caption'].values[0]
+                # print(caption);assert 0
+
+
+                ### random sample fps
+                stride = random.randint(1, self.sample_fps)  
+                
+                _total_frame_num = len(frames_all)
+                cover_frame_num = (stride * self.max_frames)
+                max_frames = self.max_frames
+                if _total_frame_num < cover_frame_num + 1:
+                    start_frame = 0
+                    end_frame = _total_frame_num-1
+                    stride = max((_total_frame_num//max_frames),1)
+                    end_frame = min(stride*max_frames, _total_frame_num-1)
+                else:
+                    start_frame = random.randint(0, _total_frame_num-cover_frame_num)
+                    end_frame = start_frame + cover_frame_num
+                frame_list = []
+                dwpose_list = []
+
+                ### get reference frame
+                random_ref = random.randint(0,_total_frame_num-1)
+                # print('start_frame:', start_frame, 'end_frame:', end_frame, 'stride:', stride, '_total_frame_num', _total_frame_num, 'random_ref', random_ref)
+                # # start_frame: 296 end_frame: 377 stride: 1 _total_frame_num 719 random_ref 228
+
+                random_ref_frame = frames_all[random_ref]
+                # print('random_ref_frame:', np.array(random_ref_frame).shape, np.min(random_ref_frame), np.max(random_ref_frame));assert 0 # random_ref_frame: (1080, 1920, 3) 0 255
+ 
+                if random_ref_frame.mode != 'RGB' and not isinstance(random_ref_frame, torch.Tensor):
+                    random_ref_frame = random_ref_frame.convert('RGB')
+                random_ref_dwpose = dwpose_all[random_ref] if self.SR_dataset else Image.open(BytesIO(dwpose_all[i_key]))
+                # print('random_ref_frame:', np.array(random_ref_frame).shape, np.min(random_ref_frame), np.max(random_ref_frame));assert 0 # random_ref_frame: (1080, 604, 3) 0 255
+                
+                ### read data
+                first_frame = None
+                for i_index in range(start_frame, end_frame, stride):
+                    if self.SR_dataset:
+                        i_frame = frames_all[i_index]
+                        if i_frame.mode != 'RGB' and not isinstance(i_frame, torch.Tensor):
+                            i_frame = i_frame.convert('RGB')
+                        i_dwpose = dwpose_all[i_index]
+                    else:
+                        i_key = list(frames_all.keys())[i_index]
+                        i_frame = Image.open(BytesIO(frames_all[i_key]))
+                        if i_frame.mode != 'RGB' and not isinstance(i_frame, torch.Tensor):
+                            i_frame = i_frame.convert('RGB')
+                        i_dwpose = Image.open(BytesIO(dwpose_all[i_key]))
+                    
+                    if first_frame is None:
+                        first_frame=i_frame
+
+                        frame_list.append(i_frame)
+                        dwpose_list.append(i_dwpose)
+
+                    else:
+                        frame_list.append(i_frame)
+                        dwpose_list.append(i_dwpose)
+
+                if (end_frame-start_frame) < max_frames:
+                    for _ in range(max_frames-(end_frame-start_frame)):
+                        if self.SR_dataset:
+                            i_frame = frames_all[end_frame-1]
+                            if i_frame.mode != 'RGB' and not isinstance(i_frame, torch.Tensor):
+                                i_frame = i_frame.convert('RGB')
+                            i_dwpose = dwpose_all[end_frame-1]
+                        else:
+                            i_key = list(frames_all.keys())[end_frame-1]
+                            
+                            i_frame = Image.open(BytesIO(frames_all[i_key]))
+                            if i_frame.mode != 'RGB' and not isinstance(i_frame, torch.Tensor):
+                                i_frame = i_frame.convert('RGB')
+                            i_dwpose = Image.open(BytesIO(dwpose_all[i_key]))
+                        
+                        frame_list.append(i_frame)
+                        dwpose_list.append(i_dwpose)
+
+                have_frames = len(frame_list)>0
+                middle_indix = 0
+
+                if have_frames:
+
+                    l_hight = random_ref_frame.size[1]
+                    l_width = random_ref_frame.size[0]
+
+                    # random crop
+                    x1 = random.randint(0, l_width//14)
+                    x2 = random.randint(0, l_width//14)
+                    y1 = random.randint(0, l_hight//14)
+                    y2 = random.randint(0, l_hight//14)
+                    
+                    
+                    random_ref_frame = random_ref_frame.crop((x1, y1,l_width-x2, l_hight-y2))
+                    ref_frame = random_ref_frame 
+                    # 
+                    
+                    random_ref_frame_tmp = torch.from_numpy(np.array(self.resize(random_ref_frame)))
+                    random_ref_dwpose_tmp = torch.from_numpy(np.array(self.resize(random_ref_dwpose.crop((x1, y1,l_width-x2, l_hight-y2))))) # [3, 512, 320]
+                    
+                    video_data_tmp = torch.stack([self.frame_process(self.resize(ss.crop((x1, y1,l_width-x2, l_hight-y2)))) for ss in frame_list], dim=0) # self.transforms(frames)
+                    dwpose_data_tmp = torch.stack([torch.from_numpy(np.array(self.resize(ss.crop((x1, y1,l_width-x2, l_hight-y2))))).permute(2,0,1) for ss in dwpose_list], dim=0)
+
+                video_data = torch.zeros(self.max_frames, 3, self.misc_size[0], self.misc_size[1])
+                dwpose_data = torch.zeros(self.max_frames, 3, self.misc_size[0], self.misc_size[1])
+                
+                if have_frames:
+                    video_data[:len(frame_list), ...] = video_data_tmp      
+                    
+                    dwpose_data[:len(frame_list), ...] = dwpose_data_tmp
+                    
+                video_data = video_data.permute(1,0,2,3)
+                dwpose_data = dwpose_data.permute(1,0,2,3)
+                
+                break
+            except Exception as e:
+                # 
+                caption = "a person is dancing"
+                # 
+                video_data = torch.zeros(3, self.max_frames, self.misc_size[0], self.misc_size[1])  
+                random_ref_frame_tmp = torch.zeros(self.misc_size[0], self.misc_size[1], 3)
+                vit_image = torch.zeros(3,self.misc_size[0], self.misc_size[1])
+                
+                dwpose_data = torch.zeros(3, self.max_frames, self.misc_size[0], self.misc_size[1])  
+                random_ref = 0
+                # 
+                random_ref_dwpose_data = torch.zeros(3, self.max_frames, self.misc_size[0], self.misc_size[1])  
+                print('{} read video frame failed with error: {}'.format(path_dir, e))
+                traceback.print_exc()
+                continue
+
+
+        text = caption 
+        path = path_dir 
+
+        if self.is_i2v:
+            video, first_frame = video_data, random_ref_frame_tmp
+            # print(video.shape, torch.min(video), torch.max(video), first_frame.shape, torch.min(first_frame), torch.max(first_frame));assert 0
+            # torch.Size([3, 81, 480, 720]) tensor(-1.) tensor(1.)  torch.Size([480, 720, 3]) tensor(0, dtype=torch.uint8) tensor(255, dtype=torch.uint8)
+
+            data = {"text": text, "video": video, "path": path, "first_frame": first_frame, "dwpose_data": dwpose_data, "random_ref_dwpose_data": random_ref_dwpose_tmp, "degradation_kernels": degradation_kernels, "degradation_params": degradation_params}
+        else:
+            video, first_frame = video_data, random_ref_frame_tmp
+            # data = {"text": text, "video": video, "path": path, "first_frame": first_frame, "dwpose_data": dwpose_data, "random_ref_dwpose_data": random_ref_dwpose_tmp, "degradation_kernels": degradation_kernels, "degradation_params": degradation_params}
+
+            ### convert video from tensor to PIL.Image 
+            video = (video + 1.0) / 2.0  # 将 [-1, 1] 映射到 [0, 1]
+            video = video.permute(1, 0, 2, 3)  # [C, T, H, W] -> [T, C, H, W]
+            video = [torchvision.transforms.functional.to_pil_image(frame) for frame in video]
+
+            ### convert first_frame from tensor to PIL.Image
+            # print(first_frame.shape, torch.min(first_frame), torch.max(first_frame));assert 0 # torch.Size([480, 832, 3]) tensor(0, dtype=torch.uint8) tensor(255, dtype=torch.uint8)
+            first_frame = first_frame.permute(2, 0, 1)
+            first_frame = torchvision.transforms.functional.to_pil_image(first_frame)
+
+            data = {"prompt": text, "video": video, "vace_video": video, "vace_reference_image": first_frame, "degradation_kernels": degradation_kernels, "degradation_params": self.degradation_params}
+        return data
+    
+
+    def __len__(self):
+        return len(self.video_list) * self.repeat
 
 
 class VideoDataset(torch.utils.data.Dataset):
@@ -390,6 +884,7 @@ def launch_data_process_task(model: DiffusionTrainingModule, dataset, output_pat
         with torch.no_grad():
             inputs = model.forward_preprocess(data)
             inputs = {key: inputs[key] for key in model.model_input_keys if key in inputs}
+            os.makedirs(output_path, exist_ok=True)
             torch.save(inputs, os.path.join(output_path, f"{data_id}.pth"))
 
 
@@ -421,6 +916,8 @@ def wan_parser():
     parser.add_argument("--use_swanlab",default=False,action="store_true",help="Whether to use SwanLab logger.",)
     parser.add_argument("--swanlab_mode", default=None, help="SwanLab mode (cloud or local).",)
     parser.add_argument("--data_process",default=False,action="store_true",help="Whether to use SwanLab logger.",)
+    parser.add_argument("--is_sr",default=False,action="store_true",help="Whether to use SwanLab logger.",)
     parser.add_argument("--use_data_pt",default=None,help="Whether to use SwanLab logger.",)
+    parser.add_argument("--degradation_config_path", type=str, default=None, help="Models to train, e.g., dit, vae, text_encoder.")
     return parser
 
