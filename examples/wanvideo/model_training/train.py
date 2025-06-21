@@ -1,6 +1,6 @@
 import torch, os, json
 from diffsynth.pipelines.wan_video_new import WanVideoPipeline, ModelConfig
-from diffsynth.trainers.utils import DiffusionTrainingModule, VideoDataset, ModelLogger, launch_training_task, wan_parser, launch_data_process_task
+from diffsynth.trainers.utils import DiffusionTrainingModule, VideoDataset, VideoDataset_pt, ModelLogger, launch_training_task, wan_parser, launch_data_process_task
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
@@ -14,6 +14,7 @@ class WanTrainingModule(DiffusionTrainingModule):
         use_gradient_checkpointing=True,
         use_gradient_checkpointing_offload=False,
         extra_inputs=None,
+        resume_from_checkpoint=None,
     ):
         super().__init__()
         # Load models
@@ -26,17 +27,18 @@ class WanTrainingModule(DiffusionTrainingModule):
             model_configs += [ModelConfig(model_id=i.split(":")[0], origin_file_pattern=i.split(":")[1]) for i in model_id_with_origin_paths]
 
         # print(f"Loading models: {model_configs}");assert 0
-        self.pipe = WanVideoPipeline.from_pretrained(torch_dtype=torch.bfloat16, device="cpu", model_configs=model_configs)
-        # self.pipe = WanVideoPipeline.from_pretrained(torch_dtype=torch.bfloat16, device="cpu", model_configs=model_configs, redirect_common_files=False)
-        # self.pipe = WanVideoPipeline.from_pretrained(
-        #     torch_dtype=torch.bfloat16,
-        #     device="cpu",
-        #     model_configs=[
-        #         ModelConfig(model_id="Wan-AI/Wan2.1-T2V-1.3B", origin_file_pattern="diffusion_pytorch_model*.safetensors"),
-        #         ModelConfig(model_id="Wan-AI/Wan2.1-T2V-1.3B", origin_file_pattern="models_t5_umt5-xxl-enc-bf16.pth"),
-        #         ModelConfig(model_id="Wan-AI/Wan2.1-T2V-1.3B", origin_file_pattern="Wan2.1_VAE.pth"),
-        #     ],
-        # )
+        if resume_from_checkpoint is None: 
+            self.pipe = WanVideoPipeline.from_pretrained(torch_dtype=torch.bfloat16, device="cpu", model_configs=model_configs)
+        else:
+            self.pipe = WanVideoPipeline.from_pretrained(
+                torch_dtype=torch.bfloat16,
+                device="cpu",
+                model_configs=[
+                    ModelConfig(path=['models/iic/VACE-Wan2.1-1.3B-Preview/diffusion_pytorch_model.safetensors', resume_from_checkpoint], offload_device=None),
+                    ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="models_t5_umt5-xxl-enc-bf16.pth", offload_device=None),
+                    ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="Wan2.1_VAE.pth", offload_device=None),
+                ],
+            )
         
         # Reset training scheduler
         self.pipe.scheduler.set_timesteps(1000, training=True)
@@ -133,6 +135,7 @@ class WanTrainingModule(DiffusionTrainingModule):
     def forward(self, data, inputs=None):
         if inputs is None: inputs = self.forward_preprocess(data)
         models = {name: getattr(self.pipe, name) for name in self.pipe.in_iteration_models}
+        # print(inputs.keys());assert 0  # Debugging line to check inputs and models
         loss = self.pipe.training_loss(**models, **inputs)
         return loss
 
@@ -140,7 +143,7 @@ class WanTrainingModule(DiffusionTrainingModule):
 if __name__ == "__main__":
     parser = wan_parser()
     args = parser.parse_args()
-    dataset = VideoDataset(args=args)
+    dataset = VideoDataset(args=args) if args.use_data_pt is None else VideoDataset_pt(args=args)
     
     model = WanTrainingModule(
         model_paths=args.model_paths,
@@ -151,6 +154,7 @@ if __name__ == "__main__":
         lora_rank=args.lora_rank,
         use_gradient_checkpointing_offload=args.use_gradient_checkpointing_offload,
         extra_inputs=args.extra_inputs,
+        resume_from_checkpoint=args.resume_from_checkpoint,
     )
     model_logger = ModelLogger(
         args.output_path,

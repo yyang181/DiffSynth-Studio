@@ -59,6 +59,7 @@ class VideoDataset(torch.utils.data.Dataset):
         else:
             metadata = pd.read_csv(metadata_path)
         self.data = [metadata.iloc[i].to_dict() for i in range(len(metadata))]
+        # print(self.data);assert 0 # [{'video': 'video1.mp4', 'prompt': 'from sunset to night, a small town, light, house, river', 'vace_video': 'video1_softedge.mp4', 'vace_reference_image': 'reference_image.png'}]
             
     
     def generate_metadata(self, folder):
@@ -170,6 +171,82 @@ class VideoDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.data) * self.repeat
+    
+class VideoDataset_pt(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        args=None,
+    ):  
+        self.pth_dir = args.use_data_pt if args is not None else None
+        self.pth_paths = [f for f in os.listdir(self.pth_dir) if f.endswith(".pth") and not f.startswith(".")]
+        # sort by the number in the file name
+        self.pth_paths.sort(key=lambda x: int(x.split(".")[0]))
+        # print(self.pth_paths);assert 0 # ['data_cache/0.pth', 'data_cache/1.pth', ...]
+
+        if 0:
+            data_id = 1
+            pth_name = self.pth_paths[data_id % len(self.pth_paths)]
+            path = os.path.join(self.pth_dir, pth_name)
+            input_dict = torch.load(path, map_location="cpu")
+            if input_dict is None:
+                warnings.warn(f"cannot load file {path}.")
+                return None
+            for key in input_dict.keys():
+                print(key)
+
+            print(f"Input video size: {input_dict['input_video'][0].size}")
+            print(f"Input video num frames: {input_dict['num_frames']}")
+            print(f"Input video height: {input_dict['height']}")
+            print(f"Input video width: {input_dict['width']}")
+            for extra_input in input_dict.keys():
+                if extra_input not in ["input_video", "num_frames", "height", "width"]:
+                    if isinstance(input_dict[extra_input], list):
+                        print(f"Extra input {extra_input}: {[img.size for img in input_dict[extra_input]]}")
+                    elif isinstance(input_dict[extra_input], torch.Tensor):
+                        print(f"Extra input {extra_input}: {input_dict[extra_input].size()}")
+                    else:
+                        print(f"Extra input {extra_input}: {input_dict[extra_input]}")
+            assert 0
+            # Input video size: (832, 480)                                                                                 
+            # Input video num frames: 49                                                                                   
+            # Input video height: 480                                                                                                                                                                                                    
+            # Input video width: 832                                                                                       
+            # Extra input cfg_scale: 1                                                                                                                                                                                                   
+            # Extra input tiled: False            
+            # Extra input rand_device: cuda                                                                                                                                                                                              
+            # Extra input use_gradient_checkpointing: True                                                                 
+            # Extra input use_gradient_checkpointing_offload: True                                                                                                                                                                       
+            # Extra input cfg_merge: False   
+            # Extra input vace_scale: 1                                                                                                                                                                                                  
+            # Extra input vace_video: [(832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (8
+            # 32, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832,
+            # 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480)]
+            # Extra input vace_reference_image: <PIL.Image.Image image mode=RGB size=832x480 at 0x7F29FD9EC820>                                                                                                                          
+            # Extra input noise: torch.Size([1, 16, 14, 60, 104])                                                          
+            # Extra input latents: torch.Size([1, 16, 14, 60, 104]) 
+            # Extra input input_latents: torch.Size([1, 16, 14, 60, 104])
+            # Extra input vace_context: torch.Size([1, 96, 14, 60, 104])
+            # Extra input prompt: from sunset to night, a small town, light, house, river
+            # Extra input context: torch.Size([1, 512, 4096])
+
+
+    def __getitem__(self, data_id):
+        pth_name = self.pth_paths[data_id % len(self.pth_paths)]
+
+        if self.pth_dir is not None:
+            path = os.path.join(self.pth_dir, pth_name)
+            input_dict = torch.load(path, map_location="cpu")
+            if input_dict is None:
+                warnings.warn(f"cannot load file {path}.")
+                return None
+        # print(input_dict);assert 0
+
+        data = input_dict
+        return data
+    
+
+    def __len__(self):
+        return len(self.pth_paths)
 
 
 
@@ -289,7 +366,7 @@ def launch_training_task(
                 step_id += 1
                 with accelerator.accumulate(model):
                     optimizer.zero_grad()
-                    loss = model(data) if use_data_pt is None else model.forward(data, inputs=torch.load(os.path.join(use_data_pt, f"{data_id}.pth"), map_location="cpu"))
+                    loss = model(data) if use_data_pt is None else model(data, inputs=data)
                     accelerator.backward(loss)
                     optimizer.step()
                     model_logger.on_step_end(accelerator, loss, step_id, epoch_id, scheduler=scheduler)
@@ -308,7 +385,7 @@ def launch_data_process_task(model: DiffusionTrainingModule, dataset, output_pat
     dataloader = torch.utils.data.DataLoader(dataset, shuffle=False, collate_fn=lambda x: x[0])
     accelerator = Accelerator()
     model, dataloader = accelerator.prepare(model, dataloader)
-    os.makedirs(os.path.join(output_path, "data_cache"), exist_ok=True)
+    # os.makedirs(os.path.join(output_path, "data_cache"), exist_ok=True)
     for data_id, data in enumerate(tqdm(dataloader)):
         with torch.no_grad():
             inputs = model.forward_preprocess(data)
@@ -329,6 +406,7 @@ def wan_parser():
     parser.add_argument("--dataset_repeat", type=int, default=1, help="Number of times to repeat the dataset per epoch.")
     parser.add_argument("--model_paths", type=str, default=None, help="Paths to load models. In JSON format.")
     parser.add_argument("--model_id_with_origin_paths", type=str, default=None, help="Model ID with origin paths, e.g., Wan-AI/Wan2.1-T2V-1.3B:diffusion_pytorch_model*.safetensors. Comma-separated.")
+    parser.add_argument("--resume_from_checkpoint", type=str, default=None, help="Path to resume from checkpoint.")
     parser.add_argument("--learning_rate", type=float, default=1e-4, help="Learning rate.")
     parser.add_argument("--num_epochs", type=int, default=1, help="Number of epochs.")
     parser.add_argument("--output_path", type=str, default="./models", help="Output save path.")
