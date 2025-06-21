@@ -180,7 +180,7 @@ class ModelConfig:
                     local_dir=os.path.join(local_model_path, self.model_id),
                     allow_file_pattern=self.origin_file_pattern,
                     ignore_file_pattern=downloaded_files,
-                    local_files_only=False
+                    local_files_only=True
                 )
             self.path = glob.glob(os.path.join(local_model_path, self.model_id, self.origin_file_pattern))
             if isinstance(self.path, list) and len(self.path) == 1:
