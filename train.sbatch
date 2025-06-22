@@ -32,7 +32,7 @@ case "$EXPERIMENT" in
     # CUDA_VISIBLE_DEVICES=0,1,2,3 \
     accelerate launch --mixed_precision=bf16 \
       --main_process_port 20000 \
-      --num_processes 4 \
+      --num_processes ${NUM_GPUS} \
       --config_file ./examples/wanvideo/model_training/full/accelerate_config_1point3B.yaml\
       examples/wanvideo/model_training/train.py \
       --dataset_base_path data/example_video_dataset \
@@ -47,7 +47,7 @@ case "$EXPERIMENT" in
       --num_epochs 1000000000000000 \
       --remove_prefix_in_ckpt "pipe.vace." \
       --resume_from_checkpoint ./exp/train/Wan2.1-VACE-1.3B_full_4gpu_datapth/epoch-506.safetensors \
-      --output_path "./exp/train/Wan2.1-VACE-1.3B_full_4gpu_datapth" \
+      --output_path "./exp/train/Wan2.1-VACE-1.3B_full_${NUM_GPUS}gpu_datapth_resume506" \
       --trainable_models "vace" \
       --extra_inputs "vace_video,vace_reference_image" \
       --use_gradient_checkpointing_offload --use_swanlab --swanlab_mode local --use_data_pt exp/train/data_process
