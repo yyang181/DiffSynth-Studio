@@ -8,8 +8,12 @@
 #SBATCH --partition=ai
 
 # 激活 conda 环境
-/HOME/paratera_xy/pxy545/miniconda3/bin/conda init             # 确保 conda 命令可用（必要）
+# /HOME/paratera_xy/pxy545/miniconda3/bin/conda init zsh            # 确保 conda 命令可用（必要）
+# 初始化 conda（一次性）路径
+source /HOME/paratera_xy/pxy545/miniconda3/etc/profile.d/conda.sh
+
 conda activate diffsynth           # 替换为你的实际 conda 环境名
+
 
 # （可选）显示当前环境和 CUDA 信息，方便调试
 echo "Conda env: $CONDA_DEFAULT_ENV"
