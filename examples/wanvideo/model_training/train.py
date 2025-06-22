@@ -287,7 +287,7 @@ class WanTrainingModule(DiffusionTrainingModule):
                 torch_dtype=torch.bfloat16,
                 device="cpu",
                 model_configs=[
-                    ModelConfig(path=['Wan-AI/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors', resume_from_checkpoint], offload_device=None),
+                    ModelConfig(path=['models/Wan-AI/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors', resume_from_checkpoint], offload_device=None),
                     ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="models_t5_umt5-xxl-enc-bf16.pth", offload_device=None),
                     ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="Wan2.1_VAE.pth", offload_device=None),
                 ],
