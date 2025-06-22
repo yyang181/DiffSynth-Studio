@@ -420,7 +420,7 @@ if __name__ == "__main__":
     if not args.is_sr:
         dataset = VideoDataset(args=args) if args.use_data_pt is None else VideoDataset_pt(args=args)
     else:
-        dataset = SR_VideoDataset(args=args) 
+        dataset = SR_VideoDataset(args=args) if args.use_data_pt is None else VideoDataset_pt(args=args)
 
     model = WanTrainingModule(
         model_paths=args.model_paths,

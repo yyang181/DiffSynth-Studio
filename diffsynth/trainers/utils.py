@@ -671,7 +671,7 @@ class VideoDataset_pt(torch.utils.data.Dataset):
         self,
         args=None,
     ):  
-        self.pth_dir = args.use_data_pt if args is not None else None
+        self.pth_dir = os.path.abspath(args.use_data_pt) if args is not None else None
         self.pth_paths = [f for f in os.listdir(self.pth_dir) if f.endswith(".pth") and not f.startswith(".")]
         # sort by the number in the file name
         self.pth_paths.sort(key=lambda x: int(x.split(".")[0]))

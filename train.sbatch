@@ -98,7 +98,7 @@ case "$EXPERIMENT" in
   4)
     echo "sr vace datapth"
 
-    # CUDA_VISIBLE_DEVICES=4 \
+    # CUDA_VISIBLE_DEVICES=0,1,2,3 \
     accelerate launch --mixed_precision=bf16 \
       --num_processes 4 \
       --main_process_port 20003 \
@@ -119,11 +119,11 @@ case "$EXPERIMENT" in
       --output_path "./exp/train/sr_vace_datapth" \
       --trainable_models "vace" \
       --extra_inputs "vace_video,vace_reference_image,degradation_kernels,degradation_params" \
-      --use_gradient_checkpointing_offload --use_swanlab --swanlab_mode disabled --is_sr --use_data_pt ../../data/OpenVidHD/train_pth_cleaned
+      --use_gradient_checkpointing_offload --use_swanlab --swanlab_mode local --is_sr --use_data_pt ../../data/OpenVidHD/train_pth_cleaned
 
   5)
-    echo "Running Experiment 5"
-    ### sr data preprocess
+    echo "sr data preprocess"
+
     CUDA_VISIBLE_DEVICES=4 python examples/wanvideo/model_training/train.py \
       --dataset_base_path ../../data/OpenVidHD \
       --dataset_metadata_path ../../data/OpenVidHD/data_csv/OpenVidHD.csv \
