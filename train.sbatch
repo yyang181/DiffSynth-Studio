@@ -19,7 +19,7 @@ nvidia-smi
 NUM_GPUS=${SLURM_GPUS_ON_NODE:-1}  # 默认值为 1
 echo "Detected $NUM_GPUS GPUs from SLURM"
 
-EXPERIMENT=1  # 控制跑哪个实验（改这里即可）
+EXPERIMENT=4  # 控制跑哪个实验（改这里即可）
 
 case "$EXPERIMENT" in
   1)
@@ -98,9 +98,10 @@ case "$EXPERIMENT" in
   4)
     echo "sr vace datapth"
 
+    # NUM_GPUS =4 
     # CUDA_VISIBLE_DEVICES=0,1,2,3 \
     accelerate launch --mixed_precision=bf16 \
-      --num_processes 4 \
+      --num_processes ${NUM_GPUS} \
       --main_process_port 20003 \
       --config_file ./examples/wanvideo/model_training/full/accelerate_config_1point3B.yaml\
       examples/wanvideo/model_training/train.py \
@@ -116,11 +117,11 @@ case "$EXPERIMENT" in
       --learning_rate 1e-4 \
       --num_epochs 1000000000000000 \
       --remove_prefix_in_ckpt "pipe.vace." \
-      --output_path "./exp/train/sr_vace_datapth" \
+      --output_path "./exp/train/sr_vace_datapth_${NUM_GPUS}gpu" \
       --trainable_models "vace" \
       --extra_inputs "vace_video,vace_reference_image,degradation_kernels,degradation_params" \
       --use_gradient_checkpointing_offload --use_swanlab --swanlab_mode local --is_sr --use_data_pt ../../data/OpenVidHD/train_pth_cleaned
-
+    ;;
   5)
     echo "sr data preprocess"
 
@@ -141,6 +142,7 @@ case "$EXPERIMENT" in
       --trainable_models "vace" \
       --extra_inputs "vace_video,vace_reference_image,degradation_kernels,degradation_params" \
       --use_gradient_checkpointing_offload --use_swanlab --swanlab_mode disabled --is_sr --data_process
+    ;;
   *)
     echo "Unknown experiment number: $EXPERIMENT"
     exit 1

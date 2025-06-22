@@ -37,7 +37,6 @@ from basicsr.utils import DiffJPEG, USMSharp
 from basicsr.utils.img_process_util import filter2D
 from basicsr.data.degradations import random_add_gaussian_noise_pt, random_add_poisson_noise_pt
 from basicsr.data.transforms import paired_random_crop
-from torchviz import make_dot
 import decord
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
