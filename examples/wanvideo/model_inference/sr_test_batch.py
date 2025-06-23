@@ -50,6 +50,12 @@ def run_inference(checkpoint_path):
             ],
         )
         pipe.enable_vram_management()
+
+        ### add torch compile
+        pipe.vae = torch.compile(pipe.vae, mode="default")  # 编译 VAE 模块
+        pipe.dit = torch.compile(pipe.dit, mode="default")  # 编译 DIT 模块
+        pipe.text_encoder = torch.compile(pipe.text_encoder, mode="default")  # 编译文本编码器
+
     except Exception as e:
         print(f"[✗] Failed to initialize pipeline with {checkpoint_path}: {e}")
         return
