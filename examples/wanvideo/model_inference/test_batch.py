@@ -26,16 +26,21 @@ def run_inference(checkpoint_path):
 
     print(f"[→] Running inference for {checkpoint_path} ...")
 
-    pipe = WanVideoPipeline.from_pretrained(
-        torch_dtype=torch.bfloat16,
-        device="cuda",
-        model_configs=[
-            ModelConfig(path=['models/Wan-AI/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors', checkpoint_path], offload_device="cpu"),
-            ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="models_t5_umt5-xxl-enc-bf16.pth", offload_device="cpu"),
-            ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="Wan2.1_VAE.pth", offload_device="cpu"),
-        ],
-    )
-    pipe.enable_vram_management()
+    # add try except block to handle potential errors
+    try:
+        pipe = WanVideoPipeline.from_pretrained(
+            torch_dtype=torch.bfloat16,
+            device="cuda",
+            model_configs=[
+                ModelConfig(path=['models/Wan-AI/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors', checkpoint_path], offload_device="cpu"),
+                ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="models_t5_umt5-xxl-enc-bf16.pth", offload_device="cpu"),
+                ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="Wan2.1_VAE.pth", offload_device="cpu"),
+            ],
+        )
+        pipe.enable_vram_management()
+    except Exception as e:
+        print(f"[✗] Failed to initialize pipeline with {checkpoint_path}: {e}")
+        return
 
     control_video = VideoData("data/example_video_dataset/video1_softedge.mp4", height=480, width=832)
     num_frames = len(control_video)

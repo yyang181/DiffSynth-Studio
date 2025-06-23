@@ -31,23 +31,28 @@ def run_inference(checkpoint_path):
 
     print(f"[→] Initializing pipeline for {checkpoint_path} ...")
 
-    pipe = WanVideoPipeline.from_pretrained(
-        torch_dtype=torch.bfloat16,
-        device="cuda",
-        model_configs=[
-            ModelConfig(path=[
-                'models/Wan-AI/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors',
-                checkpoint_path
-            ], offload_device="cpu"),
-            ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B",
-                        origin_file_pattern="models_t5_umt5-xxl-enc-bf16.pth",
-                        offload_device="cpu"),
-            ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B",
-                        origin_file_pattern="Wan2.1_VAE.pth",
-                        offload_device="cpu"),
-        ],
-    )
-    pipe.enable_vram_management()
+    # add try except block to handle potential errors
+    try:
+        pipe = WanVideoPipeline.from_pretrained(
+            torch_dtype=torch.bfloat16,
+            device="cuda",
+            model_configs=[
+                ModelConfig(path=[
+                    'models/Wan-AI/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors',
+                    checkpoint_path
+                ], offload_device="cpu"),
+                ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B",
+                            origin_file_pattern="models_t5_umt5-xxl-enc-bf16.pth",
+                            offload_device="cpu"),
+                ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B",
+                            origin_file_pattern="Wan2.1_VAE.pth",
+                            offload_device="cpu"),
+            ],
+        )
+        pipe.enable_vram_management()
+    except Exception as e:
+        print(f"[✗] Failed to initialize pipeline with {checkpoint_path}: {e}")
+        return
 
     for i, (ref_img_path, driving_video_path, prompt) in enumerate(test_list_path):
         video_name = os.path.splitext(os.path.basename(driving_video_path))[0]
