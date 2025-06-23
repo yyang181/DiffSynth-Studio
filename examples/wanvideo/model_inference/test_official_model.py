@@ -17,7 +17,7 @@ with open(prompt_txt_path, 'r') as f:
     prompts = f.readlines()
     prompts = [line.strip() for line in prompts if line.strip()]
     # avoid save_name too long 
-    save_names = [line.split(',')[0].strip()[:20] for line in prompts if line.strip()]
+    save_names = [line.split(',')[0].strip()[:100] for line in prompts if line.strip()]
 
 pipe = WanVideoPipeline.from_pretrained(
     torch_dtype=torch.bfloat16,
