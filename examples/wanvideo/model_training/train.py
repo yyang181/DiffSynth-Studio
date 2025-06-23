@@ -443,6 +443,13 @@ if __name__ == "__main__":
     assert not (args.use_data_pt is not None and args.data_process), \
         "You must choose one of --use_data_pt or --data_process, not both."
         
+    if 0:
+        ### add torch compile
+        model.pipe.vae = torch.compile(model.pipe.vae, mode="default")  # 编译 VAE 模块
+        model.pipe.dit = torch.compile(model.pipe.dit, mode="default")  # 编译 DIT 模块
+        model.pipe.text_encoder = torch.compile(model.pipe.text_encoder, mode="default")  # 编译文本编码器
+        model.pipe.vace = torch.compile(model.pipe.vace, mode="default")  # 编译文本编码器
+    
     if args.data_process:
         # Launch data processing task
         launch_data_process_task(

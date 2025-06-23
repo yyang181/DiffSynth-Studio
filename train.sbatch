@@ -4,8 +4,8 @@
 #SBATCH --error=logs/wan_vace_train_%j.err
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:4
-#SBATCH --partition=ai
+#SBATCH --gres=gpu:8
+#SBATCH --partition=pxy545
 
 # 激活 conda 环境
 # /HOME/paratera_xy/pxy545/miniconda3/bin/conda init zsh            # 确保 conda 命令可用（必要）
@@ -121,7 +121,8 @@ case "$EXPERIMENT" in
       --learning_rate 1e-4 \
       --num_epochs 1000000000000000 \
       --remove_prefix_in_ckpt "pipe.vace." \
-      --output_path "./exp/train/sr_vace_datapth_${NUM_GPUS}gpu" \
+      --resume_from_checkpoint ./exp/train/sr_vace_datapth_4gpu/epoch-19.safetensors \
+      --output_path "./exp/train/sr_vace_datapth_${NUM_GPUS}gpu_resume19" \
       --trainable_models "vace" \
       --extra_inputs "vace_video,vace_reference_image,degradation_kernels,degradation_params" \
       --use_gradient_checkpointing_offload --use_swanlab --swanlab_mode local --is_sr --use_data_pt ../../data/OpenVidHD/train_pth_cleaned
