@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=$SLURM_JOB_NAME
-#SBATCH --output=logs/%j.out   # 标准输出日志（%j 代表 Job ID）
-#SBATCH --error=logs/%j.err    # 标准错误日志
+#SBATCH --output=logs/%j_%x.out   # 标准输出日志（%j 代表 Job ID）
+#SBATCH --error=logs/%j_%x.err    # 标准错误日志
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:8
@@ -121,8 +121,8 @@ accelerate launch --mixed_precision=bf16 \
   --model_id_with_origin_paths Wan-AI/Wan2.1-VACE-1.3B:diffusion_pytorch_model*.safetensors,Wan-AI/Wan2.1-VACE-1.3B:models_t5_umt5-xxl-enc-bf16.pth,Wan-AI/Wan2.1-VACE-1.3B:Wan2.1_VAE.pth \
   --learning_rate 1e-4 --num_epochs 1000000000000000 \
   --remove_prefix_in_ckpt pipe.vace. \
-  --resume_from_checkpoint ./exp/train/Wan2.1-VACE-1.3B_full_4gpu_datapth_resume506/epoch-154.safetensors \
-  --output_path ./exp/train/${SLURM_JOB_NAME}_${NUM_GPUS}gpu_resume506_resume154 \
+  --resume_from_checkpoint ./exp/train/sr_vace_datapth_8gpu_resume19/epoch-58.safetensors \
+  --output_path ./exp/train/${SLURM_JOB_NAME}_${NUM_GPUS}gpu_resume19_resume58 \
   --trainable_models vace \
   --extra_inputs vace_video,vace_reference_image,degradation_kernels,degradation_params \
   --use_gradient_checkpointing_offload \
