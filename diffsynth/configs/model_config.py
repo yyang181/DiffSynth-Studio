@@ -56,6 +56,7 @@ from ..models.stepvideo_vae import StepVideoVAE
 from ..models.stepvideo_dit import StepVideoModel
 
 from ..models.wan_video_dit import WanModel
+from ..models.wan_video_dit_v1_vacefull import WanModel_v1_vacefull
 from ..models.wan_video_text_encoder import WanTextEncoder
 from ..models.wan_video_image_encoder import WanImageEncoder
 from ..models.wan_video_vae import WanVideoVAE
@@ -144,6 +145,7 @@ model_loader_configs = [
     (None, "ccc42284ea13e1ad04693284c7a09be6", ["wan_video_vae"], [WanVideoVAE], "civitai"),
     (None, "dbd5ec76bbf977983f972c151d545389", ["wan_video_motion_controller"], [WanMotionControllerModel], "civitai"),
     (None, "d30fb9e02b1dbf4e509142f05cf7dd50", ["flux_dit", "step1x_connector"], [FluxDiT, Qwen2Connector], "civitai"),
+    (None, "9269f8db9040a9d860eaca435be61814", ["wan_video_dit_v1_vacefull"], [WanModel_v1_vacefull], "civitai"),
 ]
 huggingface_model_loader_configs = [
     # These configs are provided for detecting model type automatically.

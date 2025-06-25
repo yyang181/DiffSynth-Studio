@@ -835,8 +835,8 @@ def launch_training_task(
     use_data_pt: str = None,
     args=None,
 ):
-    dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, collate_fn=lambda x: x[0])
-    accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, log_with="swanlab" if args.use_swanlab else None,)
+    dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=lambda x: x[0])
+    accelerator = Accelerator(gradient_accumulation_steps=args.gradient_accumulation_steps, log_with="swanlab" if args.use_swanlab else None,)
     model, optimizer, dataloader, scheduler = accelerator.prepare(model, optimizer, dataloader, scheduler)
     
     if args.use_swanlab and accelerator.is_main_process:
@@ -909,6 +909,7 @@ def wan_parser():
     parser.add_argument("--lora_base_model", type=str, default=None, help="Which model LoRA is added to.")
     parser.add_argument("--lora_target_modules", type=str, default="q,k,v,o,ffn.0,ffn.2", help="Which layers LoRA is added to.")
     parser.add_argument("--lora_rank", type=int, default=32, help="Rank of LoRA.")
+    parser.add_argument("--batch_size", type=int, default=1, help="Batch size.")
     parser.add_argument("--extra_inputs", default=None, help="Additional model inputs, comma-separated.")
     parser.add_argument("--use_gradient_checkpointing_offload", default=False, action="store_true", help="Whether to offload gradient checkpointing to CPU memory.")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps.")
