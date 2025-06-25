@@ -836,7 +836,7 @@ def launch_training_task(
     args=None,
 ):
     dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=lambda x: x[0])
-    accelerator = Accelerator(gradient_accumulation_steps=args.gradient_accumulation_steps, log_with="swanlab" if args.use_swanlab else None,)
+    accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, log_with="swanlab" if args.use_swanlab else None,)
     model, optimizer, dataloader, scheduler = accelerator.prepare(model, optimizer, dataloader, scheduler)
     
     if args.use_swanlab and accelerator.is_main_process:
@@ -857,14 +857,20 @@ def launch_training_task(
         with tqdm(dataloader, desc=f"Epoch {epoch_id + 1}/{num_epochs}, Step {step_id}") as pbar:
             for data_id, data in enumerate(pbar):
                 step_id += 1
-                with accelerator.accumulate(model):
-                    optimizer.zero_grad()
-                    loss = model(data) if use_data_pt is None else model(data, inputs=data)
-                    accelerator.backward(loss)
-                    optimizer.step()
-                    model_logger.on_step_end(accelerator, loss, step_id, epoch_id, scheduler=scheduler)
-                    scheduler.step()
-                    
+                # with accelerator.accumulate(model):
+                #     optimizer.zero_grad()
+                #     loss = model(data) if use_data_pt is None else model(data, inputs=data)
+                #     accelerator.backward(loss)
+                #     optimizer.step()
+                #     model_logger.on_step_end(accelerator, loss, step_id, epoch_id, scheduler=scheduler)
+                #     scheduler.step()
+                optimizer.zero_grad()
+                loss = model(data) if use_data_pt is None else model(data, inputs=data)
+                accelerator.backward(loss)
+                optimizer.step()
+                model_logger.on_step_end(accelerator, loss, step_id, epoch_id, scheduler=scheduler)
+                scheduler.step()
+
                 # 更新 tqdm 的显示内容
                 pbar.set_postfix(loss=loss.item())
         
