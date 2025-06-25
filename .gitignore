@@ -1,4 +1,4 @@
-models/
+./models/
 **/__pycache__/**
 diffsynth.egg-info/
 data/
@@ -7,3 +7,6 @@ output/
 .mv
 .msc
 logs/
+models/Wan-AI/
+models/iic
+models/HF_Wan2.1-VACE-1.3B/
