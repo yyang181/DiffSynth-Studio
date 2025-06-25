@@ -1,7 +1,7 @@
 import os
 import torch
 from PIL import Image
-from diffsynth import save_video, VideoData
+from diffsynth import save_video, VideoData, load_state_dict
 from diffsynth.pipelines.wan_video_new_v1_vacefull import ModelConfig
 from diffsynth.pipelines.wan_video_new_v1_vacefull import WanVideoPipeline_v1_vacefull as WanVideoPipeline
 import argparse
@@ -48,6 +48,18 @@ def run_inference(checkpoint_path):
                             offload_device="cpu"),
             ],
         )
+
+        ### add vacefull parameters
+        pipe.dit.enable_vacefull_condition()
+        print(f"🔍 Loading weights from: {checkpoint_path}")
+        dit_state_dict = load_state_dict(checkpoint_path)
+        vacefull_state_dict = {}
+        for key in dit_state_dict.keys():
+            if 'vacefull_patch_embedding.' in key:
+                vacefull_state_dict[key.split("vacefull_patch_embedding.")[1]] = dit_state_dict[key]
+        pipe.dit.vacefull_patch_embedding.load_state_dict(vacefull_state_dict, strict=True)
+
+
         pipe.enable_vram_management()
 
         ### add torch compile

@@ -465,8 +465,8 @@ class WanVideoPipeline_v1_vacefull(BasePipeline):
         if use_usp: pipe.enable_usp()
         return pipe
 
-    def denoising_model_enable_vacefull_input(self):
-        return self.dit.enable_vacefull_condition()
+    # def denoising_model_enable_vacefull_input(self):
+    #     return self.dit.enable_vacefull_condition()
     
     @torch.no_grad()
     def __call__(
