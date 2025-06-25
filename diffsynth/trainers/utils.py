@@ -814,8 +814,9 @@ class ModelLogger:
     
     
     def on_epoch_end(self, accelerator, model, epoch_id):
+        save_checkpoint_interval = 100
         accelerator.wait_for_everyone()
-        if accelerator.is_main_process:
+        if accelerator.is_main_process and epoch_id % save_checkpoint_interval == 0:
             state_dict = accelerator.get_state_dict(model)
             state_dict = accelerator.unwrap_model(model).export_trainable_state_dict(state_dict, remove_prefix=self.remove_prefix_in_ckpt)
             os.makedirs(self.output_path, exist_ok=True)
