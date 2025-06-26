@@ -71,7 +71,11 @@ def run_inference(checkpoint_path):
         print(f"[→] Running sample {i}: {video_name}")
 
         control_video = VideoData(driving_video_path, height=480, width=832)
+        
+        # Ensure the video has at most 49 frames
+        control_video = [control_video[i] for i in range(49)] if len(control_video) > 49 else control_video
         num_frames = len(control_video)
+        # print(f"Number of frames in the video: {num_frames}");assert 0
 
         video = pipe(
             prompt=prompt,

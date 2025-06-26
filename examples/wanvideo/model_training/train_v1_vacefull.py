@@ -28,6 +28,8 @@ from basicsr.utils.img_process_util import filter2D
 from basicsr.data.degradations import random_add_gaussian_noise_pt, random_add_poisson_noise_pt
 from basicsr.data.transforms import paired_random_crop
 
+from diffsynth import load_state_dict
+
 # 定义 img2tensor 函数
 def img2tensor(img):
     """
@@ -283,6 +285,14 @@ class WanTrainingModule(DiffusionTrainingModule):
         # print(f"Loading models: {model_configs}");assert 0
         if resume_from_checkpoint is None: 
             self.pipe = WanVideoPipeline.from_pretrained(torch_dtype=torch.bfloat16, device="cpu", model_configs=model_configs)
+            
+            # add vacefull parameters
+            if hasattr(self.pipe.dit, 'vacefull_patch_embedding'):
+                pass
+            else:
+                print("🔍 VACEFull patch embedding not found in the model, initilize it.")
+                self.pipe.dit.enable_vacefull_condition()
+
         else:
             self.pipe = WanVideoPipeline.from_pretrained(
                 torch_dtype=torch.bfloat16,
@@ -293,9 +303,18 @@ class WanTrainingModule(DiffusionTrainingModule):
                     ModelConfig(model_id="Wan-AI/Wan2.1-VACE-1.3B", origin_file_pattern="Wan2.1_VAE.pth", offload_device=None),
                 ],
             )
-        
-        # add vacefull parameters
-        self.pipe.dit.enable_vacefull_condition()
+
+            ### add vacefull parameters
+            self.pipe.dit.enable_vacefull_condition()
+            print(f"🔍 Loading vacefull_patch_embedding weights from resume ckpt: {resume_from_checkpoint}")
+            dit_state_dict = load_state_dict(resume_from_checkpoint)
+            vacefull_state_dict = {}
+            for key in dit_state_dict.keys():
+                if 'vacefull_patch_embedding.' in key:
+                    vacefull_state_dict[key.split("vacefull_patch_embedding.")[1]] = dit_state_dict[key]
+            self.pipe.dit.vacefull_patch_embedding.load_state_dict(vacefull_state_dict, strict=True)
+            
+
 
         # Reset training scheduler
         self.pipe.scheduler.set_timesteps(1000, training=True)
@@ -413,6 +432,28 @@ class WanTrainingModule(DiffusionTrainingModule):
         if inputs is None: inputs = self.forward_preprocess(data)
         models = {name: getattr(self.pipe, name) for name in self.pipe.in_iteration_models}
         # print(inputs.keys());assert 0  # Debugging line to check inputs and models
+
+        if 0:
+            ### TODO so ugly, need to fix the inputs
+            ### fix pt_data_parameters
+            extra_inputs = {
+                "cfg_scale": 1,
+                "tiled": False,
+                "rand_device": self.pipe.device,
+                "use_gradient_checkpointing": self.use_gradient_checkpointing,
+                "use_gradient_checkpointing_offload": self.use_gradient_checkpointing_offload,
+                "cfg_merge": False,
+                "vace_scale": 1,
+            }
+            for extra_input in extra_inputs:
+                if extra_input in inputs:
+                    pass
+                else:
+                    inputs[extra_input] = extra_inputs[extra_input]
+                    # print(f"Warning: extra input {extra_input} not found in inputs, set to default value: {extra_inputs[extra_input]}")
+            # print(f"Inputs keys: {inputs.keys()}")  # Debugging line to check inputs keys
+
+
         loss = self.pipe.training_loss(**models, **inputs)
         return loss
 

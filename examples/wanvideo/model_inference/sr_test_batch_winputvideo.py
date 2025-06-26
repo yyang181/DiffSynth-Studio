@@ -13,9 +13,9 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def run_inference(checkpoint_path):
     test_list_path = [
-        # ["/opt/data/private/yyx/data/20241210_RVSR_test/flow_propagation/ref/1984/frame0054.png",
-        #  "/opt/data/private/yyx/data/20241210_RVSR_test/flow_propagation/input_video/1984.mp4",
-        #  "The video begins with a close-up shot of a person holding a red flag on a track. The individual is dressed in formal attire, suggesting a ceremonial or official role. The background is a vibrant orange, likely part of a stadium or arena setting, which is partially visible. The name \"LIBIN WANG\" appears at the bottom left corner of the screen, accompanied by a logo featuring a stylized figure running"],
+        ["/opt/data/private/yyx/data/20241210_RVSR_test/flow_propagation/ref/1984/frame0054.png",
+         "/opt/data/private/yyx/data/20241210_RVSR_test/flow_propagation/input_video/1984.mp4",
+         "The video begins with a close-up shot of a person holding a red flag on a track. The individual is dressed in formal attire, suggesting a ceremonial or official role. The background is a vibrant orange, likely part of a stadium or arena setting, which is partially visible. The name \"LIBIN WANG\" appears at the bottom left corner of the screen, accompanied by a logo featuring a stylized figure running"],
 
         ["/opt/data/private/yyx/data/OpenVidHD_onlyonemp4/images/0zT5Ux__Pbk_16_0to101/frame0000.png",
          "/opt/data/private/yyx/data/OpenVidHD_onlyonemp4/lr_videos/lr_0zT5Ux__Pbk_16_0to101.mp4",

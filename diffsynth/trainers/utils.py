@@ -670,11 +670,14 @@ class VideoDataset_pt(torch.utils.data.Dataset):
         self,
         args=None,
     ):  
+        self.repeat = args.dataset_repeat
         self.pth_dir = os.path.abspath(args.use_data_pt) if args is not None else None
         self.pth_paths = [f for f in os.listdir(self.pth_dir) if f.endswith(".pth") and not f.startswith(".")]
         # sort by the number in the file name
         self.pth_paths.sort(key=lambda x: int(x.split(".")[0]))
         # print(self.pth_paths);assert 0 # ['data_cache/0.pth', 'data_cache/1.pth', ...]
+
+        self.pt_keys_to_remove = args.pt_keys_to_remove
 
         if 0:
             data_id = 1
@@ -684,13 +687,37 @@ class VideoDataset_pt(torch.utils.data.Dataset):
             if input_dict is None:
                 warnings.warn(f"cannot load file {path}.")
                 return None
+
+            # print(f"Input video size: {input_dict['input_video'][0].size}")
+            # print(f"Input video num frames: {input_dict['num_frames']}")
+            # print(f"Input video height: {input_dict['height']}")
+            # print(f"Input video width: {input_dict['width']}")
+            # for extra_input in input_dict.keys():
+            #     if extra_input not in ["input_video", "num_frames", "height", "width"]:
+            #         if isinstance(input_dict[extra_input], list):
+            #             print(f"Extra input {extra_input}: {[img.size for img in input_dict[extra_input]]}")
+            #         elif isinstance(input_dict[extra_input], torch.Tensor):
+            #             print(f"Extra input {extra_input}: {input_dict[extra_input].size()}")
+            #         else:
+            #             print(f"Extra input {extra_input}: {input_dict[extra_input]}")
+
+            # 删除指定键
+            keys_to_remove = self.pt_keys_to_remove
+            for key in keys_to_remove:
+                if key in input_dict:
+                    del input_dict[key]
+
             for key in input_dict.keys():
                 print(key)
 
-            print(f"Input video size: {input_dict['input_video'][0].size}")
-            print(f"Input video num frames: {input_dict['num_frames']}")
-            print(f"Input video height: {input_dict['height']}")
-            print(f"Input video width: {input_dict['width']}")
+            # remove batch dim of keys
+            for key in input_dict.keys():
+                if isinstance(input_dict[key], torch.Tensor) and input_dict[key].dim() > 1:
+                    input_dict[key] = input_dict[key][0]
+                elif isinstance(input_dict[key], list):
+                    input_dict[key] = [item[0] for item in input_dict[key]]
+
+            # print size
             for extra_input in input_dict.keys():
                 if extra_input not in ["input_video", "num_frames", "height", "width"]:
                     if isinstance(input_dict[extra_input], list):
@@ -699,6 +726,7 @@ class VideoDataset_pt(torch.utils.data.Dataset):
                         print(f"Extra input {extra_input}: {input_dict[extra_input].size()}")
                     else:
                         print(f"Extra input {extra_input}: {input_dict[extra_input]}")
+
             assert 0
             # Input video size: (832, 480)                                                                                 
             # Input video num frames: 49                                                                                   
@@ -732,6 +760,23 @@ class VideoDataset_pt(torch.utils.data.Dataset):
             if input_dict is None:
                 warnings.warn(f"cannot load file {path}.")
                 return None
+            
+            if 0:
+                ### 删除指定键
+                # keys_to_remove = ["num_frames", "height", "width", "rand_device", "cfg_scale", "tiled", "use_gradient_checkpointing", "use_gradient_checkpointing_offload", "cfg_merge", "vace_video", "vace_reference_image", "prompt"]
+                # keys_to_remove = ["rand_device", "vace_video", "vace_reference_image", "prompt", "use_gradient_checkpointing", "use_gradient_checkpointing_offload", "cfg_merge", "cfg_scale", "tiled", "vace_scale"]
+                keys_to_remove = self.pt_keys_to_remove
+                for key in keys_to_remove:
+                    if key in input_dict:
+                        del input_dict[key]
+
+                ### remove batch dim of keys
+                for key in input_dict.keys():
+                    if isinstance(input_dict[key], torch.Tensor) and input_dict[key].dim() > 1:
+                        input_dict[key] = input_dict[key][0]
+                    elif isinstance(input_dict[key], list):
+                        input_dict[key] = [item[0] for item in input_dict[key]]
+
         # print(input_dict);assert 0
 
         data = input_dict
@@ -739,7 +784,7 @@ class VideoDataset_pt(torch.utils.data.Dataset):
     
 
     def __len__(self):
-        return len(self.pth_paths)
+        return len(self.pth_paths) * self.repeat
 
 
 
@@ -813,17 +858,57 @@ class ModelLogger:
             })
     
     
-    def on_epoch_end(self, accelerator, model, epoch_id):
-        save_checkpoint_interval = 100
+    def on_epoch_end(self, accelerator, model, epoch_id, save_checkpoint_every_n_epoch=1):
         accelerator.wait_for_everyone()
-        if accelerator.is_main_process and epoch_id % save_checkpoint_interval == 0:
+        if accelerator.is_main_process and epoch_id % save_checkpoint_every_n_epoch == 0:
             state_dict = accelerator.get_state_dict(model)
             state_dict = accelerator.unwrap_model(model).export_trainable_state_dict(state_dict, remove_prefix=self.remove_prefix_in_ckpt)
             os.makedirs(self.output_path, exist_ok=True)
             path = os.path.join(self.output_path, f"epoch-{epoch_id}.safetensors")
             accelerator.save(state_dict, path, safe_serialization=True)
 
+def pt_data_collate_fn(batch):
+    # print(batch[0].keys());assert 0 
+#     dict_keys(['height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'vace_reference_image', 'noise', 'latents',
+#  'input_latents', 'vace_context', 'prompt', 'context'])
 
+    height = batch[0]["height"]
+    width = batch[0]["width"]
+    num_frames = batch[0]["num_frames"]
+    cfg_scale = batch[0]["cfg_scale"]
+    tiled = batch[0]["tiled"]
+    use_gradient_checkpointing = batch[0]["use_gradient_checkpointing"]
+    use_gradient_checkpointing_offload = batch[0]["use_gradient_checkpointing_offload"]
+    cfg_merge = batch[0]["cfg_merge"]
+    vace_scale = batch[0]["vace_scale"]
+
+    # rand_device = batch[0]["rand_device"]
+    # vace_reference_image = batch[0]["vace_reference_image"]
+    # prompt = [item["prompt"] for item in batch]
+
+    input_latents = torch.stack([item["input_latents"].squeeze(0) for item in batch])  # 去掉前面维度 1
+    noise = torch.stack([item["noise"].squeeze(0) for item in batch])  # 去掉前面维度 1
+    latents = torch.stack([item["latents"].squeeze(0) for item in batch])  # 去掉前面维度 1
+    vace_context = torch.stack([item["vace_context"].squeeze(0) for item in batch])  # 去掉前面维度 1
+    context = torch.stack([item["context"].squeeze(0) for item in batch]) # 去掉前面维度 1
+    
+    return {
+        "input_latents": input_latents,
+        "noise": noise,
+        "latents": latents,
+        "vace_context": vace_context,
+        "context": context,
+        # "rand_device": rand_device,
+        "height": height,
+        "width": width,
+        "num_frames": num_frames,
+        "cfg_scale": cfg_scale,
+        "tiled": tiled,
+        "use_gradient_checkpointing": use_gradient_checkpointing,
+        "use_gradient_checkpointing_offload": use_gradient_checkpointing_offload,
+        "cfg_merge": cfg_merge,
+        "vace_scale": vace_scale,
+    }
 
 def launch_training_task(
     dataset: torch.utils.data.Dataset,
@@ -836,7 +921,11 @@ def launch_training_task(
     use_data_pt: str = None,
     args=None,
 ):
-    dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=lambda x: x[0])
+    # dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=lambda x: x[0])
+    # dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+    dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=pt_data_collate_fn if use_data_pt is not None else lambda x: x[0])
+
+
     accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, log_with="swanlab" if args.use_swanlab else None,)
     model, optimizer, dataloader, scheduler = accelerator.prepare(model, optimizer, dataloader, scheduler)
     
@@ -875,7 +964,7 @@ def launch_training_task(
                 # 更新 tqdm 的显示内容
                 pbar.set_postfix(loss=loss.item())
         
-        model_logger.on_epoch_end(accelerator, model, epoch_id)
+        model_logger.on_epoch_end(accelerator, model, epoch_id, args.save_checkpoint_every_n_epoch)
     
     accelerator.end_training()
 
@@ -917,6 +1006,7 @@ def wan_parser():
     parser.add_argument("--lora_target_modules", type=str, default="q,k,v,o,ffn.0,ffn.2", help="Which layers LoRA is added to.")
     parser.add_argument("--lora_rank", type=int, default=32, help="Rank of LoRA.")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size.")
+    parser.add_argument("--save_checkpoint_every_n_epoch", type=int, default=1, help="Batch size.")
     parser.add_argument("--extra_inputs", default=None, help="Additional model inputs, comma-separated.")
     parser.add_argument("--use_gradient_checkpointing_offload", default=False, action="store_true", help="Whether to offload gradient checkpointing to CPU memory.")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps.")
@@ -926,5 +1016,7 @@ def wan_parser():
     parser.add_argument("--is_sr",default=False,action="store_true",help="Whether to use SwanLab logger.",)
     parser.add_argument("--use_data_pt",default=None,help="Whether to use SwanLab logger.",)
     parser.add_argument("--degradation_config_path", type=str, default=None, help="Models to train, e.g., dit, vae, text_encoder.")
+    parser.add_argument("--pt_keys_to_remove",nargs="+",type=str,default=["rand_device", "vace_video", "vace_reference_image", "prompt", "use_gradient_checkpointing", "use_gradient_checkpointing_offload", "cfg_merge", "cfg_scale", "tiled", "vace_scale"],help="A list of strs")
+
     return parser
 
