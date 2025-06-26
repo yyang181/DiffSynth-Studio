@@ -145,6 +145,7 @@ model_loader_configs = [
     (None, "ccc42284ea13e1ad04693284c7a09be6", ["wan_video_vae"], [WanVideoVAE], "civitai"),
     (None, "dbd5ec76bbf977983f972c151d545389", ["wan_video_motion_controller"], [WanMotionControllerModel], "civitai"),
     (None, "d30fb9e02b1dbf4e509142f05cf7dd50", ["flux_dit", "step1x_connector"], [FluxDiT, Qwen2Connector], "civitai"),
+    (None, "9269f8db9040a9d860eaca435be61814", ["wan_video_dit_v1_vacefull"], [WanModel_v1_vacefull], "civitai"),
     (None, "91d96ce48118fdccceaf2798ec860d97", ["wan_video_dit_v1_vacefull"], [WanModel_v1_vacefull], "civitai"),
 ]
 huggingface_model_loader_configs = [
