@@ -149,8 +149,8 @@ model_loader_configs = [
     (None, "d30fb9e02b1dbf4e509142f05cf7dd50", ["flux_dit", "step1x_connector"], [FluxDiT, Qwen2Connector], "civitai"),
     (None, "9269f8db9040a9d860eaca435be61814", ["wan_video_dit_v1_vacefull"], [WanModel_v1_vacefull], "civitai"),
     (None, "91d96ce48118fdccceaf2798ec860d97", ["wan_video_dit_v1_vacefull"], [WanModel_v1_vacefull], "civitai"),
-    # (None, "9269f8db9040a9d860eaca435be61814", ["wan_video_dit_v2_vacefull"], [WanModel_v2_vacefull], "civitai"),
-    # (None, "91d96ce48118fdccceaf2798ec860d97", ["wan_video_dit_v2_vacefull"], [WanModel_v2_vacefull], "civitai"),
+    (None, "9269f8db9040a9d860eaca435be61814", ["wan_video_dit_v2_vacefull"], [WanModel_v2_vacefull], "civitai"),
+    (None, "91d96ce48118fdccceaf2798ec860d97", ["wan_video_dit_v2_vacefull"], [WanModel_v2_vacefull], "civitai"),
 ]
 huggingface_model_loader_configs = [
     # These configs are provided for detecting model type automatically.

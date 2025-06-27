@@ -439,6 +439,12 @@ class WanTrainingModule(DiffusionTrainingModule):
         models = {name: getattr(self.pipe, name) for name in self.pipe.in_iteration_models}
         # print(inputs.keys());assert 0  # Debugging line to check inputs and models
 
+        ### handle inputs
+        del inputs['vace_context']
+        inputs['latents'] = inputs['input_latents'][:,:,1:,:,:]
+        inputs['noise'] = inputs['noise'][:,:,1:,:,:]
+        inputs['input_latents'] = inputs['input_latents'][:,:,1:,:,:]
+
         if 0:
             ### TODO so ugly, need to fix the inputs
             ### fix pt_data_parameters

@@ -235,7 +235,7 @@ class WanVideoPipeline_v2_vacefull(BasePipeline):
         timestep_id = torch.randint(0, self.scheduler.num_train_timesteps, (1,))
         timestep = self.scheduler.timesteps[timestep_id].to(dtype=self.torch_dtype, device=self.device)
         
-        # print(inputs["input_latents"].shape, inputs["noise"].shape);assert 0 # torch.Size([B, 16, 22, 60, 104]) 
+        # print(inputs["input_latents"].shape, inputs["noise"].shape);assert 0 # torch.Size([16, 16, 13, 60, 104]) torch.Size([16, 16, 13, 60, 104])
         inputs["latents"] = self.scheduler.add_noise(inputs["input_latents"], inputs["noise"], timestep)
         training_target = self.scheduler.training_target(inputs["input_latents"], inputs["noise"], timestep)
         
@@ -492,7 +492,7 @@ class WanVideoPipeline_v2_vacefull(BasePipeline):
         if use_usp: pipe.initialize_usp()
         pipe.text_encoder = model_manager.fetch_model("wan_video_text_encoder")
 
-        pipe.dit = model_manager.fetch_model("wan_video_dit_v1_vacefull")
+        pipe.dit = model_manager.fetch_model("wan_video_dit_v2_vacefull")
         # if pipe.dit is None:
         #     pipe.dit = model_manager.fetch_model("wan_video_dit")
         #     print("[!] WanVideoPipeline_v2_vacefull is initialized with WanVideoDIT, which is not compatible with VACE. Please use WanVideoDITV1VACEFULL instead.")
@@ -1087,6 +1087,7 @@ def model_fn_wan_video(
     motion_controller: WanMotionControllerModel = None,
     vace: VaceWanModel = None,
     latents: torch.Tensor = None,
+    vace_video_latent: Optional[torch.Tensor] = None,
     timestep: torch.Tensor = None,
     context: torch.Tensor = None,
     clip_feature: Optional[torch.Tensor] = None,
@@ -1159,10 +1160,10 @@ def model_fn_wan_video(
     x, (f, h, w) = dit.patchify(x, control_camera_latents_input)
     
     # add vacefull input
-    vacefull_input, (f, h, w) = dit.vacefull_patchify(vace_context)
+    vacefull_input, (f, h, w) = dit.vacefull_patchify(vace_video_latent)
     # print(x.shape, vacefull_input.shape, f, h, w);assert 0 torch.Size([1, 34320, 1536]) torch.Size([1, 34320, 1536]) 22 30 52
     x = x + vacefull_input
-    vace_context = None
+    assert vace_context is None, "VACE context must be not provided when using VACEFull model."
     
     # Reference image
     if reference_latents is not None:
