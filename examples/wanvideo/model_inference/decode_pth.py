@@ -78,6 +78,66 @@ def decode_pth_keys(pth_dir, decode_dir, pipe):
 
         # assert 0     
 
+def decode_train_pth(pth_dir, decode_dir, pipe):
+    pth_files = sorted([f for f in os.listdir(pth_dir) if f.endswith('.pth')])
+
+    pipe.load_models_to_device(['vae'])
+
+    for pth_file in tqdm.tqdm(pth_files, desc="Checking .pth files"):
+        pth_path = os.path.join(pth_dir, pth_file)
+        data = torch.load(pth_path, map_location='cpu')
+
+        keys_to_ignonre = ['vace_context', 'context', 'negative_context', 'noise_pred'
+        ]
+
+        # check all keys' shape and save to txt file 
+        os.makedirs(os.path.dirname(os.path.join(decode_dir, pth_file)), exist_ok=True)
+        with open(os.path.join(decode_dir, pth_file + '.txt'), 'w') as f:
+            for key in data.keys():
+                if isinstance(data[key], torch.Tensor):
+                    f.write(f"{key}: {data[key].shape, type(data[key])}\n") 
+                elif isinstance(data[key], str):
+                    f.write(f"{key}: {data[key], type(data[key])}\n")
+                elif isinstance(data[key], int):
+                    f.write(f"{key}: {str(data[key]), type(data[key])}\n")
+                elif isinstance(data[key], float):
+                    f.write(f"{key}: {str(data[key]), type(data[key])}\n")
+                elif isinstance(data[key], bool):
+                    f.write(f"{key}: {str(data[key]), type(data[key])}\n")
+                elif isinstance(data[key], torch.device):
+                    f.write(f"{key}: {str(data[key]), type(data[key])}\n")
+            f.write(f"total lens of keys: {len(data)}\n")
+        # assert 0
+
+
+        for key in data.keys():
+            if isinstance(data[key], torch.Tensor):
+                if key in keys_to_ignonre:
+                    print(f"Skipping {key} in {pth_file}...")
+                    continue
+
+                data[key] = data[key].to(dtype=pipe.torch_dtype, device=pipe.device)
+                print(f"************* Decoding {key} in {pth_file} *************")
+                # continue
+
+                # save image 
+                output_path_image = os.path.join(decode_dir, pth_file, f"{key}.png")
+                os.makedirs(os.path.dirname(output_path_image), exist_ok=True)
+                image = pipe.vae.decode(data[key][:,:,0,:,:].unsqueeze(2), device=pipe.device, tiled=True, tile_size=(30, 52), tile_stride=(15, 26))
+                image = pipe.vae_output_to_video(image)
+                image[0].save(output_path_image, format='PNG')
+            
+                # save video 
+                real_video = data[key][:,:,1:,:,:]
+                # print(real_video.shape); assert 0 # torch.Size([1, 16, 13, 60, 104])
+                real_video = pipe.vae.decode(real_video, device=pipe.device, tiled=True, tile_size=(30, 52), tile_stride=(15, 26))
+                video = pipe.vae_output_to_video(real_video)
+
+                output_path = os.path.join(decode_dir, pth_file, f"{key}.mp4")
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                save_video(video, output_path, fps=15, quality=5)
+            
+
 def run_inference(checkpoint_path, args):
     pipe = WanVideoPipeline.from_pretrained(
         torch_dtype=torch.bfloat16,
@@ -100,11 +160,15 @@ def run_inference(checkpoint_path, args):
     pipe.dit = torch.compile(pipe.dit, mode="default")  # 编译 DIT 模块
     pipe.text_encoder = torch.compile(pipe.text_encoder, mode="default")  # 编译文本编码器
 
-    pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2'
-    decode_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2_decoded'
+    # pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2'
+    # decode_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2_decoded'
+    # # check_pth_keys(pth_dir)
+    # decode_pth_keys(pth_dir, decode_dir, pipe)
 
-    # check_pth_keys(pth_dir)
-    decode_pth_keys(pth_dir, decode_dir, pipe)
+    pth_dir = './tmp_debug'
+    decode_dir = './tmp_debug_decoded'
+    decode_train_pth(pth_dir, decode_dir, pipe)
+
 
 
 def extract_epoch_number(filename):

@@ -157,7 +157,7 @@ accelerate launch --mixed_precision=bf16 \
   --use_gradient_checkpointing_offload \
   --use_swanlab --swanlab_mode local \
   --is_sr \
-  --use_data_pt ../../data/OpenVidHD/train_pth_cleaned
+  --use_data_pt ../../data/OpenVidHD/train_pth_v2
 EOF
 )
     ;;

@@ -913,11 +913,13 @@ def pt_data_collate_fn(batch):
     latents = torch.stack([item["latents"].squeeze(0) for item in batch])  # 去掉前面维度 1
     vace_context = torch.stack([item["vace_context"].squeeze(0) for item in batch])  # 去掉前面维度 1
     context = torch.stack([item["context"].squeeze(0) for item in batch]) # 去掉前面维度 1
+    vace_video_latent = torch.stack([item["vace_video_latent"].squeeze(0) for item in batch])  # 去掉前面维度 1
     
     return {
         "input_latents": input_latents,
         "noise": noise,
         "latents": latents,
+        "vace_video_latent": vace_video_latent,
         "vace_context": vace_context,
         "context": context,
         # "rand_device": rand_device,

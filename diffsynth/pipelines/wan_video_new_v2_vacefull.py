@@ -14,8 +14,8 @@ from typing_extensions import Literal
 
 from ..models import ModelManager, load_state_dict
 
-from ..models.wan_video_dit_v1_vacefull import RMSNorm, sinusoidal_embedding_1d
-from ..models.wan_video_dit_v1_vacefull import WanModel_v1_vacefull
+from ..models.wan_video_dit_v2_vacefull import RMSNorm, sinusoidal_embedding_1d
+from ..models.wan_video_dit_v2_vacefull import WanModel_v2_vacefull
 
 from ..models.wan_video_text_encoder import WanTextEncoder, T5RelativeEmbedding, T5LayerNorm
 from ..models.wan_video_vae import WanVideoVAE, RMS_norm, CausalConv3d, Upsample
@@ -190,7 +190,7 @@ class ModelConfig:
                 self.path = self.path[0]
 
 
-class WanVideoPipeline_v1_vacefull(BasePipeline):
+class WanVideoPipeline_v2_vacefull(BasePipeline):
 
     def __init__(self, device="cuda", torch_dtype=torch.bfloat16, tokenizer_path=None):
         super().__init__(
@@ -201,7 +201,7 @@ class WanVideoPipeline_v1_vacefull(BasePipeline):
         self.prompter = WanPrompter(tokenizer_path=tokenizer_path)
         self.text_encoder: WanTextEncoder = None
         self.image_encoder: WanImageEncoder = None
-        self.dit: WanModel_v1_vacefull = None
+        self.dit: WanModel_v2_vacefull = None
         self.vae: WanVideoVAE = None
         self.motion_controller: WanMotionControllerModel = None
         self.vace: VaceWanModel = None
@@ -240,23 +240,6 @@ class WanVideoPipeline_v1_vacefull(BasePipeline):
         training_target = self.scheduler.training_target(inputs["input_latents"], inputs["noise"], timestep)
         
         noise_pred = self.model_fn(**inputs, timestep=timestep)
-
-        if 0:
-            ### save inputs["latents"], inputs["input_latents"] and noise_pred as pth for debugging
-            # print(noise_pred.shape, training_target.shape, inputs["latents"].shape, inputs["input_latents"].shape);assert 0
-            # torch.Size([1, 16, 14, 60, 104]) torch.Size([1, 16, 14, 60, 104]) torch.Size([1, 16, 14, 60, 104]) torch.Size([1, 16, 14, 60, 104])
-            tmp_save_dir = "./tmp_debug"
-            os.makedirs(tmp_save_dir, exist_ok=True)
-            torch.save({
-                "noise_pred": noise_pred,
-                "training_target": training_target,
-                "latents": inputs["latents"],
-                "input_latents": inputs["input_latents"],
-                "vace_context": inputs["vace_context"],
-            }, os.path.join(tmp_save_dir, f"debug_{timestep_id.item()}.pth"))
-            assert 0
-
-
         
         loss = torch.nn.functional.mse_loss(noise_pred.float(), training_target.float())
         loss = loss * self.scheduler.training_weight(timestep)
@@ -505,14 +488,14 @@ class WanVideoPipeline_v1_vacefull(BasePipeline):
             )
         
         # Initialize pipeline
-        pipe = WanVideoPipeline_v1_vacefull(device=device, torch_dtype=torch_dtype)
+        pipe = WanVideoPipeline_v2_vacefull(device=device, torch_dtype=torch_dtype)
         if use_usp: pipe.initialize_usp()
         pipe.text_encoder = model_manager.fetch_model("wan_video_text_encoder")
 
         pipe.dit = model_manager.fetch_model("wan_video_dit_v1_vacefull")
         # if pipe.dit is None:
         #     pipe.dit = model_manager.fetch_model("wan_video_dit")
-        #     print("[!] WanVideoPipeline_v1_vacefull is initialized with WanVideoDIT, which is not compatible with VACE. Please use WanVideoDITV1VACEFULL instead.")
+        #     print("[!] WanVideoPipeline_v2_vacefull is initialized with WanVideoDIT, which is not compatible with VACE. Please use WanVideoDITV1VACEFULL instead.")
 
         pipe.vae = model_manager.fetch_model("wan_video_vae")
         pipe.image_encoder = model_manager.fetch_model("wan_video_image_encoder")
@@ -666,7 +649,7 @@ class PipelineUnit:
         self.onload_model_names = onload_model_names
 
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, inputs: dict, positive=True, **kwargs) -> dict:
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, inputs: dict, positive=True, **kwargs) -> dict:
         raise NotImplementedError("`process` is not implemented.")
 
 
@@ -675,7 +658,7 @@ class PipelineUnitRunner:
     def __init__(self):
         pass
 
-    def __call__(self, unit: PipelineUnit, pipe: WanVideoPipeline_v1_vacefull, inputs_shared: dict, inputs_posi: dict, inputs_nega: dict) -> tuple[dict, dict]:
+    def __call__(self, unit: PipelineUnit, pipe: WanVideoPipeline_v2_vacefull, inputs_shared: dict, inputs_posi: dict, inputs_nega: dict) -> tuple[dict, dict]:
         if unit.take_over:
             # Let the pipeline unit take over this function.
             inputs_shared, inputs_posi, inputs_nega = unit.process(pipe, inputs_shared=inputs_shared, inputs_posi=inputs_posi, inputs_nega=inputs_nega)
@@ -703,7 +686,7 @@ class WanVideoUnit_ShapeChecker(PipelineUnit):
     def __init__(self):
         super().__init__(input_params=("height", "width", "num_frames"))
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, height, width, num_frames):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, height, width, num_frames):
         height, width, num_frames = pipe.check_resize_height_width(height, width, num_frames)
         return {"height": height, "width": width, "num_frames": num_frames}
 
@@ -713,7 +696,7 @@ class WanVideoUnit_NoiseInitializer(PipelineUnit):
     def __init__(self):
         super().__init__(input_params=("height", "width", "num_frames", "seed", "rand_device", "vace_reference_image"))
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, height, width, num_frames, seed, rand_device, vace_reference_image):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, height, width, num_frames, seed, rand_device, vace_reference_image):
         length = (num_frames - 1) // 4 + 1
         if vace_reference_image is not None:
             length += 1
@@ -731,7 +714,7 @@ class WanVideoUnit_InputVideoEmbedder(PipelineUnit):
             onload_model_names=("vae",)
         )
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, input_video, noise, tiled, tile_size, tile_stride, vace_reference_image):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, input_video, noise, tiled, tile_size, tile_stride, vace_reference_image):
         if input_video is None:
             return {"latents": noise}
         pipe.load_models_to_device(["vae"])
@@ -758,7 +741,7 @@ class WanVideoUnit_PromptEmbedder(PipelineUnit):
             onload_model_names=("text_encoder",)
         )
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, prompt, positive) -> dict:
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, prompt, positive) -> dict:
         pipe.load_models_to_device(self.onload_model_names)
         prompt_emb = pipe.prompter.encode_prompt(prompt, positive=positive, device=pipe.device)
         return {"context": prompt_emb}
@@ -772,7 +755,7 @@ class WanVideoUnit_ImageEmbedder(PipelineUnit):
             onload_model_names=("image_encoder", "vae")
         )
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, input_image, end_image, num_frames, height, width, tiled, tile_size, tile_stride):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, input_image, end_image, num_frames, height, width, tiled, tile_size, tile_stride):
         if input_image is None:
             return {}
         pipe.load_models_to_device(self.onload_model_names)
@@ -810,7 +793,7 @@ class WanVideoUnit_FunControl(PipelineUnit):
             onload_model_names=("vae")
         )
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, control_video, num_frames, height, width, tiled, tile_size, tile_stride, clip_feature, y):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, control_video, num_frames, height, width, tiled, tile_size, tile_stride, clip_feature, y):
         if control_video is None:
             return {}
         pipe.load_models_to_device(self.onload_model_names)
@@ -834,7 +817,7 @@ class WanVideoUnit_FunReference(PipelineUnit):
             onload_model_names=("vae")
         )
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, reference_image, height, width):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, reference_image, height, width):
         if reference_image is None:
             return {}
         pipe.load_models_to_device(["vae"])
@@ -853,7 +836,7 @@ class WanVideoUnit_FunCameraControl(PipelineUnit):
             input_params=("height", "width", "num_frames", "camera_control_direction", "camera_control_speed", "camera_control_origin", "latents", "input_image")
         )
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, height, width, num_frames, camera_control_direction, camera_control_speed, camera_control_origin, latents, input_image):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, height, width, num_frames, camera_control_direction, camera_control_speed, camera_control_origin, latents, input_image):
         if camera_control_direction is None:
             return {}
         camera_control_plucker_embedding = pipe.dit.control_adapter.process_camera_coordinates(
@@ -885,7 +868,7 @@ class WanVideoUnit_SpeedControl(PipelineUnit):
     def __init__(self):
         super().__init__(input_params=("motion_bucket_id",))
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, motion_bucket_id):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, motion_bucket_id):
         if motion_bucket_id is None:
             return {}
         motion_bucket_id = torch.Tensor((motion_bucket_id,)).to(dtype=pipe.torch_dtype, device=pipe.device)
@@ -902,7 +885,7 @@ class WanVideoUnit_VACE(PipelineUnit):
 
     def process(
         self,
-        pipe: WanVideoPipeline_v1_vacefull,
+        pipe: WanVideoPipeline_v2_vacefull,
         vace_video, vace_mask, vace_reference_image, vace_scale,
         height, width, num_frames,
         tiled, tile_size, tile_stride
@@ -952,7 +935,7 @@ class WanVideoUnit_UnifiedSequenceParallel(PipelineUnit):
     def __init__(self):
         super().__init__(input_params=())
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull):
         if hasattr(pipe, "use_unified_sequence_parallel"):
             if pipe.use_unified_sequence_parallel:
                 return {"use_unified_sequence_parallel": True}
@@ -968,7 +951,7 @@ class WanVideoUnit_TeaCache(PipelineUnit):
             input_params_nega={"num_inference_steps": "num_inference_steps", "tea_cache_l1_thresh": "tea_cache_l1_thresh", "tea_cache_model_id": "tea_cache_model_id"},
         )
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, num_inference_steps, tea_cache_l1_thresh, tea_cache_model_id):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, num_inference_steps, tea_cache_l1_thresh, tea_cache_model_id):
         if tea_cache_l1_thresh is None:
             return {}
         return {"tea_cache": TeaCache(num_inference_steps, rel_l1_thresh=tea_cache_l1_thresh, model_id=tea_cache_model_id)}
@@ -980,7 +963,7 @@ class WanVideoUnit_CfgMerger(PipelineUnit):
         super().__init__(take_over=True)
         self.concat_tensor_names = ["context", "clip_feature", "y", "reference_latents"]
 
-    def process(self, pipe: WanVideoPipeline_v1_vacefull, inputs_shared, inputs_posi, inputs_nega):
+    def process(self, pipe: WanVideoPipeline_v2_vacefull, inputs_shared, inputs_posi, inputs_nega):
         if not inputs_shared["cfg_merge"]:
             return inputs_shared, inputs_posi, inputs_nega
         for name in self.concat_tensor_names:
@@ -1018,7 +1001,7 @@ class TeaCache:
             raise ValueError(f"{model_id} is not a supported TeaCache model id. Please choose a valid model id in ({supported_model_ids}).")
         self.coefficients = self.coefficients_dict[model_id]
 
-    def check(self, dit: WanModel_v1_vacefull, x, t_mod):
+    def check(self, dit: WanModel_v2_vacefull, x, t_mod):
         modulated_inp = t_mod.clone()
         if self.step == 0 or self.step == self.num_inference_steps - 1:
             should_calc = True
@@ -1100,7 +1083,7 @@ class TemporalTiler_BCTHW:
 
 
 def model_fn_wan_video(
-    dit: WanModel_v1_vacefull,
+    dit: WanModel_v2_vacefull,
     motion_controller: WanMotionControllerModel = None,
     vace: VaceWanModel = None,
     latents: torch.Tensor = None,
