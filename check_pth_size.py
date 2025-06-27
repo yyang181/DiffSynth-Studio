@@ -81,7 +81,13 @@ def delete_key(d, key_path):
         print(f"Deleting key: {key_path}")
         del d[parts[-1]]
 
-def clean_pth(pth_path, keys_to_remove, cleaned_pth_path):
+def clean_pth(pth_path, cleaned_pth_path):
+    # 要删除的键名列表（支持嵌套路径）
+    keys_to_remove = [
+        'input_video',                      # 举例：顶层 key
+        'vace_video',              # 举例：嵌套 key
+    ]
+
     # 加载 .pth 文件
     data = torch.load(pth_path, map_location='cpu')
 
@@ -89,28 +95,38 @@ def clean_pth(pth_path, keys_to_remove, cleaned_pth_path):
     for key in keys_to_remove:
         delete_key(data, key)
 
+    # make sure save path is valid
+    os.makedirs(os.path.dirname(cleaned_pth_path), exist_ok=True)
+
     torch.save(data, cleaned_pth_path)
     print(f"Cleaned .pth saved to: {cleaned_pth_path}, keys before cleaning: {len(data.keys())}, after cleaning: {len(data.keys())}")
 
-if __name__ == "__main__":
-    pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth'
-    cleaned_pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_cleaned'
-    os.makedirs(cleaned_pth_dir, exist_ok=True)
-
-    # 要删除的键名列表（支持嵌套路径）
-    keys_to_remove = [
-        'input_video',                      # 举例：顶层 key
-        'vace_video',              # 举例：嵌套 key
-    ]
-
+def clean_pils_in_pth(pth_dir, cleaned_pth_dir):
     pth_files = sorted([f for f in os.listdir(pth_dir) if f.endswith('.pth')])
+    pth_files.sort(key=lambda x: int(x.split(".")[0]))
     for pth_file in tqdm.tqdm(pth_files, desc="Processing .pth files"):
         pth_path = os.path.join(pth_dir, pth_file)
-        # print(f"Checking {pth_path}...")
-        # check_pth(pth_path)
 
         cleaned_pth_path = os.path.join(cleaned_pth_dir, pth_file)
-        clean_pth(pth_path, keys_to_remove, cleaned_pth_path)
+
+        clean_pth(pth_path, cleaned_pth_path)
         print(f"Cleaned {pth_file} and saved to {cleaned_pth_path}\n")
 
     print("All .pth files processed and cleaned.")
+
+def check_pth_keys(pth_dir):
+    pth_files = sorted([f for f in os.listdir(pth_dir) if f.endswith('.pth')])
+    pth_files.sort(key=lambda x: int(x.split(".")[0]))
+    for pth_file in tqdm.tqdm(pth_files, desc="Checking .pth files"):
+        pth_path = os.path.join(pth_dir, pth_file)
+        data = torch.load(pth_path, map_location='cpu')
+        print(f"Keys in {pth_file}: {list(data.keys())}")
+        assert 0
+
+if __name__ == "__main__":
+    pth_dir = '/opt/data/private/yyx/code/DiffSynth-Studio/exp/train/data_process/data_cache'
+    cleaned_pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_cleaned'
+
+    # clean_pils_in_pth(pth_dir, cleaned_pth_dir)
+    check_pth_keys(pth_dir)
+

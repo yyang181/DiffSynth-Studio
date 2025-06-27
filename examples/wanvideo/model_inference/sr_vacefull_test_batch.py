@@ -11,7 +11,7 @@ import re
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-def run_inference(checkpoint_path):
+def run_inference(checkpoint_path, args):
     test_list_path = [
         ["/opt/data/private/yyx/data/20241210_RVSR_test/flow_propagation/ref/1984/frame0054.png",
          "/opt/data/private/yyx/data/20241210_RVSR_test/flow_propagation/input_video/1984.mp4",
@@ -73,7 +73,7 @@ def run_inference(checkpoint_path):
 
     for i, (ref_img_path, driving_video_path, prompt) in enumerate(test_list_path):
         video_name = os.path.splitext(os.path.basename(driving_video_path))[0]
-        output_path = os.path.join(save_root, f"{video_name}.mp4")
+        output_path = os.path.join(save_root, f"{video_name}_winputvideo.mp4") if args.winputvideo else os.path.join(save_root, f"{video_name}.mp4")
 
         if os.path.exists(output_path):
             print(f"[✓] Skipping sample {i} ({video_name}), output already exists.")
@@ -91,6 +91,7 @@ def run_inference(checkpoint_path):
         video = pipe(
             prompt=prompt,
             negative_prompt="色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+            input_video=control_video if args.winputvideo else None,
             vace_video=control_video,
             vace_reference_image=Image.open(ref_img_path).resize((832, 480)),
             seed=1,
@@ -155,11 +156,12 @@ def extract_epoch_number(filename):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DiffSynth auto checkpoint inference")
     parser.add_argument("--checkpoint", type=str, required=True, help="Checkpoint path (file or folder)")
+    parser.add_argument("--winputvideo",default=False,action="store_true",help="Whether to use SwanLab logger.",)
     args = parser.parse_args()
 
     ckpt_path = args.checkpoint
     if os.path.isfile(ckpt_path):
-        run_inference(ckpt_path)
+        run_inference(ckpt_path, args)
     elif os.path.isdir(ckpt_path):
         # ckpt_files = [os.path.join(ckpt_path, f) for f in os.listdir(ckpt_path) if f.endswith(".safetensors")]
         ckpt_files = [
@@ -174,6 +176,6 @@ if __name__ == "__main__":
             # continue 
             
             print(f"Inferencing with checkpoint: {ckpt}")
-            run_inference(ckpt)
+            run_inference(ckpt, args)
     else:
         raise ValueError(f"Invalid checkpoint path: {ckpt_path}")

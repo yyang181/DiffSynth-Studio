@@ -245,6 +245,51 @@ class WanVideoPipeline_v1_vacefull(BasePipeline):
         loss = loss * self.scheduler.training_weight(timestep)
         return loss
 
+    # def validation_loss(self, **inputs):
+    #     self.scheduler_copy = FlowMatchScheduler(shift=5, sigma_min=0.0, extra_one_step=True)
+    #     self.scheduler_copy.set_timesteps(20, denoising_strength=1.0, shift=5.0)
+
+    #     cfg_scale = 4.0
+    
+    #     for progress_id, timestep in enumerate(tqdm(self.scheduler_copy.timesteps)):
+    #         timestep = timestep.unsqueeze(0).to(dtype=self.torch_dtype, device=self.device)
+
+    #         # Inference
+    #         noise_pred_posi = self.model_fn(**inputs, timestep=timestep)
+    #         if cfg_scale != 1.0:
+    #             noise_pred_nega = self.model_fn(**models, **inputs_shared, **inputs_nega, timestep=timestep)
+    #             noise_pred = noise_pred_nega + cfg_scale * (noise_pred_posi - noise_pred_nega)
+    #         else:
+    #             noise_pred = noise_pred_posi
+
+    #         # Scheduler
+    #         inputs_shared["latents"] = self.scheduler.step(noise_pred, self.scheduler.timesteps[progress_id], inputs_shared["latents"])
+        
+    #     # VACE (TODO: remove it)
+    #     if vace_reference_image is not None:
+    #         inputs_shared["latents"] = inputs_shared["latents"][:, :, 1:]
+
+    #     # Decode
+    #     self.load_models_to_device(['vae'])
+    #     video = self.vae.decode(inputs_shared["latents"], device=self.device, tiled=tiled, tile_size=tile_size, tile_stride=tile_stride)
+    #     video = self.vae_output_to_video(video)
+    #     self.load_models_to_device([])
+
+
+
+
+    #     timestep_id = torch.randint(0, self.scheduler.num_train_timesteps, (1,))
+    #     timestep = self.scheduler.timesteps[timestep_id].to(dtype=self.torch_dtype, device=self.device)
+        
+    #     # print(inputs["input_latents"].shape, inputs["noise"].shape);assert 0 # torch.Size([B, 16, 22, 60, 104]) 
+    #     inputs["latents"] = self.scheduler.add_noise(inputs["input_latents"], inputs["noise"], timestep)
+    #     training_target = self.scheduler.training_target(inputs["input_latents"], inputs["noise"], timestep)
+        
+    #     noise_pred = self.model_fn(**inputs, timestep=timestep)
+        
+    #     loss = torch.nn.functional.mse_loss(noise_pred.float(), training_target.float())
+    #     loss = loss * self.scheduler.training_weight(timestep)
+    #     return loss
 
     def enable_vram_management(self, num_persistent_param_in_dit=None, vram_limit=None, vram_buffer=0.5):
         self.vram_management_enabled = True
@@ -481,7 +526,6 @@ class WanVideoPipeline_v1_vacefull(BasePipeline):
         end_image: Optional[Image.Image] = None,
         # Video-to-video
         input_video: Optional[list[Image.Image]] = None,
-        input_video_lq: Optional[list[Image.Image]] = None,
         denoising_strength: Optional[float] = 1.0,
         # ControlNet
         control_video: Optional[list[Image.Image]] = None,
@@ -852,6 +896,7 @@ class WanVideoUnit_VACE(PipelineUnit):
                 vace_video = torch.zeros((1, 3, num_frames, height, width), dtype=pipe.torch_dtype, device=pipe.device)
             else:
                 vace_video = pipe.preprocess_video(vace_video)
+                vace_video_latent = pipe.vae.encode(vace_video, device=pipe.device, tiled=tiled, tile_size=tile_size, tile_stride=tile_stride).to(dtype=pipe.torch_dtype, device=pipe.device)
             
             if vace_mask is None:
                 vace_mask = torch.ones_like(vace_video)
@@ -872,12 +917,15 @@ class WanVideoUnit_VACE(PipelineUnit):
             else:
                 vace_reference_image = pipe.preprocess_video([vace_reference_image])
                 vace_reference_latents = pipe.vae.encode(vace_reference_image, device=pipe.device, tiled=tiled, tile_size=tile_size, tile_stride=tile_stride).to(dtype=pipe.torch_dtype, device=pipe.device)
+                
+                vace_reference_latent = vace_reference_latents
+                
                 vace_reference_latents = torch.concat((vace_reference_latents, torch.zeros_like(vace_reference_latents)), dim=1)
                 vace_video_latents = torch.concat((vace_reference_latents, vace_video_latents), dim=2)
                 vace_mask_latents = torch.concat((torch.zeros_like(vace_mask_latents[:, :, :1]), vace_mask_latents), dim=2)
             
             vace_context = torch.concat((vace_video_latents, vace_mask_latents), dim=1)
-            return {"vace_context": vace_context, "vace_scale": vace_scale}
+            return {"vace_context": vace_context, "vace_scale": vace_scale, "vace_video_latent": vace_video_latent, "vace_reference_latent": vace_reference_latent}
         else:
             return {"vace_context": None, "vace_scale": vace_scale}
 

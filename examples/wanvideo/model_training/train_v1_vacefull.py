@@ -336,7 +336,8 @@ class WanTrainingModule(DiffusionTrainingModule):
         self.use_gradient_checkpointing_offload = use_gradient_checkpointing_offload
         self.extra_inputs = extra_inputs.split(",") if extra_inputs is not None else []
         
-        self.model_input_keys = ['input_video', 'height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'vace_video', 'vace_reference_image', 'noise', 'latents', 'input_latents', 'vace_context', 'prompt', 'context']
+        # self.model_input_keys = ['input_video', 'height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'vace_video', 'vace_reference_image', 'noise', 'latents', 'input_latents', 'vace_context', 'prompt', 'context']
+        self.model_input_keys = ['height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'noise', 'latents', 'input_latents', 'vace_context', 'vace_video_latent', 'vace_reference_latent', 'prompt', 'context', 'negative_context']
         
     def forward_preprocess(self, data):
         # CFG-sensitive parameters
@@ -422,10 +423,15 @@ class WanTrainingModule(DiffusionTrainingModule):
         for unit in self.pipe.units:
             inputs_shared, inputs_posi, inputs_nega = self.pipe.unit_runner(unit, self.pipe, inputs_shared, inputs_posi, inputs_nega)
 
+        inputs_nega_update_key_name = {
+            "negative_context": inputs_nega["context"] if "context" in inputs_nega else None,
+        }
+
         # print(inputs_shared.keys(), inputs_posi.keys(), inputs_nega.keys());assert 0 # 
         # dict_keys(['input_video', 'height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'vace_video', 'vace_reference_image', 'noise', 'latents', 'input_latents', 'vace_context']) dict_keys(['prompt', 'context']) dict_keys(['context'])
 
-        return {**inputs_shared, **inputs_posi}
+        # return {**inputs_shared, **inputs_posi}
+        return {**inputs_shared, **inputs_posi, **inputs_nega_update_key_name}
     
     
     def forward(self, data, inputs=None):

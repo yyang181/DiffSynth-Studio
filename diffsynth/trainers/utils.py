@@ -47,7 +47,7 @@ class SR_VideoDataset(torch.utils.data.Dataset):
         # metadata = pd.read_csv(metadata_path)
         # self.path = [os.path.join(base_path, "train", file_name) for file_name in metadata["file_name"]]
         # self.text = metadata["text"].to_list()
-        self.max_num_frames = 81
+        self.max_num_frames = args.num_frames
         self.frame_interval = 2
         self.num_frames = args.num_frames
         self.height = args.height
@@ -867,6 +867,28 @@ class ModelLogger:
             path = os.path.join(self.output_path, f"epoch-{epoch_id}.safetensors")
             accelerator.save(state_dict, path, safe_serialization=True)
 
+            # ### do validation 
+            # video = self.pipe.test(
+            #     prompt=prompt,
+            #     negative_prompt="色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+            #     input_video=control_video if args.winputvideo else None,
+            #     vace_video=control_video,
+            #     vace_reference_image=Image.open(ref_img_path).resize((832, 480)),
+            #     seed=1,
+            #     tiled=True,
+            #     num_frames=num_frames
+            # )
+                
+            # fake_latents = self.pipe.test(prompt_emb_posi = prompt_emb, prompt_emb_nega=neg_prompt_emb, lq_latents=lq_latents, num_frames=49, num_inference_steps=20, cfg_scale = 4, device = self.device)
+            # fake_latents_path = os.path.join(self.trainer.default_root_dir, f"iter_{self.global_step}_{batch_idx}.pth")
+            # data = {"fake_latents": fake_latents}
+            # torch.save(data, fake_latents_path)
+            # loss = torch.nn.functional.mse_loss(fake_latents.float(), latents.float())
+            # print(f"iter_{self.global_step}_{batch_idx}_val_loss {loss}")
+            # self.log('val_loss', loss)
+            # return {"val_loss": loss}
+    
+
 def pt_data_collate_fn(batch):
     # print(batch[0].keys());assert 0 
 #     dict_keys(['height', 'width', 'num_frames', 'cfg_scale', 'tiled', 'rand_device', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload', 'cfg_merge', 'vace_scale', 'vace_reference_image', 'noise', 'latents',
@@ -978,7 +1000,12 @@ def launch_data_process_task(model: DiffusionTrainingModule, dataset, output_pat
     for data_id, data in enumerate(tqdm(dataloader)):
         with torch.no_grad():
             inputs = model.forward_preprocess(data)
+
+            # print(f"Processing data {data_id} with inputs: {inputs.keys()}")
             inputs = {key: inputs[key] for key in model.model_input_keys if key in inputs}
+            # {"latents": noise, "input_latents": input_latents} input_latents = ref concat HR_video
+            # print(f"Saving data {data_id} with inputs: {inputs.keys()}");assert 0
+
             os.makedirs(output_path, exist_ok=True)
             torch.save(inputs, os.path.join(output_path, f"{data_id}.pth"))
 
