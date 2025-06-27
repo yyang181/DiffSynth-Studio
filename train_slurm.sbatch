@@ -151,7 +151,8 @@ accelerate launch --mixed_precision=bf16 \
   --model_id_with_origin_paths Wan-AI/Wan2.1-T2V-1.3B:diffusion_pytorch_model*.safetensors,Wan-AI/Wan2.1-VACE-1.3B:models_t5_umt5-xxl-enc-bf16.pth,Wan-AI/Wan2.1-VACE-1.3B:Wan2.1_VAE.pth \
   --learning_rate 5e-5 --num_epochs 1000000000000000 \
   --remove_prefix_in_ckpt pipe.dit. \
-  --output_path ./exp/train/${SLURM_JOB_NAME}_${NUM_GPUS}gpu_bs16 \
+  --resume_from_checkpoint ./exp/train/sr_vacefull_datapth_8gpu_bs16/epoch-50.safetensors \
+  --output_path ./exp/train/${SLURM_JOB_NAME}_${NUM_GPUS}gpu_bs16_resume50 \
   --trainable_models dit \
   --extra_inputs vace_video,vace_reference_image,degradation_kernels,degradation_params \
   --use_gradient_checkpointing_offload \
