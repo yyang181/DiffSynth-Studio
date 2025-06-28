@@ -64,17 +64,46 @@ def decode_pth_keys(pth_dir, decode_dir, pipe):
                 data[key] = data[key].to(dtype=pipe.torch_dtype, device=pipe.device)
                 print(f"************* Decoding {key} in {pth_file} *************")
                 # continue
-                video = pipe.vae.decode(data[key], device=pipe.device, tiled=True, tile_size=(30, 52), tile_stride=(15, 26))
-                video = pipe.vae_output_to_video(video)
 
-                if key == 'vace_reference_latent':
+                if data[key].shape[2] == 14:
+                    # print(key, data[key].shape);assert 0 # noise torch.Size([1, 16, 14, 60, 104])
+
+                    # save image 
+                    output_path_image = os.path.join(decode_dir, pth_file, f"{key}.png")
+                    os.makedirs(os.path.dirname(output_path_image), exist_ok=True)
+                    image = pipe.vae.decode(data[key][:,:,0,:,:].unsqueeze(2), device=pipe.device, tiled=True, tile_size=(30, 52), tile_stride=(15, 26))
+                    image = pipe.vae_output_to_video(image)
+                    image[0].save(output_path_image, format='PNG')
+                
+                    # save video 
+                    real_video = data[key][:,:,1:,:,:]
+                    # print(real_video.shape); assert 0 # torch.Size([1, 16, 13, 60, 104])
+                    real_video = pipe.vae.decode(real_video, device=pipe.device, tiled=True, tile_size=(30, 52), tile_stride=(15, 26))
+                    video = pipe.vae_output_to_video(real_video)
+
+                    output_path = os.path.join(decode_dir, pth_file, f"{key}.mp4")
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    save_video(video, output_path, fps=15, quality=5)
+
+                elif data[key].shape[2] == 13:
+                    video = pipe.vae.decode(data[key], device=pipe.device, tiled=True, tile_size=(30, 52), tile_stride=(15, 26))
+                    video = pipe.vae_output_to_video(video)
+
+                    output_path = os.path.join(decode_dir, pth_file, f"{key}.mp4")
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    save_video(video, output_path, fps=15, quality=5)
+
+                elif data[key].shape[2] == 1 and key == 'vace_reference_latent':
+                    video = pipe.vae.decode(data[key], device=pipe.device, tiled=True, tile_size=(30, 52), tile_stride=(15, 26))
+                    video = pipe.vae_output_to_video(video)
+
                     output_path = os.path.join(decode_dir, pth_file, f"{key}.png")
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
                     video[0].save(output_path, format='PNG')
-                    continue
-                output_path = os.path.join(decode_dir, pth_file, f"{key}.mp4")
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                save_video(video, output_path, fps=15, quality=5)
+
+                else:
+                    print("error")
+                    assert 0
 
         # assert 0     
 
@@ -160,14 +189,14 @@ def run_inference(checkpoint_path, args):
     pipe.dit = torch.compile(pipe.dit, mode="default")  # 编译 DIT 模块
     pipe.text_encoder = torch.compile(pipe.text_encoder, mode="default")  # 编译文本编码器
 
-    # pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2'
-    # decode_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2_decoded'
-    # # check_pth_keys(pth_dir)
-    # decode_pth_keys(pth_dir, decode_dir, pipe)
+    pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2'
+    decode_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2_decoded'
+    # check_pth_keys(pth_dir)
+    decode_pth_keys(pth_dir, decode_dir, pipe)
 
-    pth_dir = './tmp_debug'
-    decode_dir = './tmp_debug_decoded'
-    decode_train_pth(pth_dir, decode_dir, pipe)
+    # pth_dir = './tmp_debug'
+    # decode_dir = './tmp_debug_decoded'
+    # decode_train_pth(pth_dir, decode_dir, pipe)
 
 
 
