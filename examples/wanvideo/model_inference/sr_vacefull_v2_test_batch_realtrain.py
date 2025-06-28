@@ -32,6 +32,7 @@ def run_inference(checkpoint_path, args):
     test_list_path = []
     test_list_path_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2_decoded'
     txt_files = sorted(glob.glob(os.path.join(test_list_path_dir, '*.txt')))
+    txt_file = txt_files[:5]  # For testing, limit to first 5 files
     input_lr_videos = [txt_name.replace('.txt', '/vace_video_latent.mp4') for txt_name in txt_files]
     input_hr_videos = [txt_name.replace('.txt', '/input_latents.mp4') for txt_name in txt_files]
     for i, txt_file, input_lr_video, input_hr_video in zip(range(len(txt_files)), txt_files, input_lr_videos, input_hr_videos):
