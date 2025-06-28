@@ -24,7 +24,7 @@ def check_pth_keys(pth_dir):
 
 def decode_pth_keys(pth_dir, decode_dir, pipe):
     pth_files = sorted([f for f in os.listdir(pth_dir) if f.endswith('.pth')])
-    pth_files.sort(key=lambda x: int(x.split(".")[0]))
+    # pth_files.sort(key=lambda x: int(x.split(".")[0]))
 
     pipe.load_models_to_device(['vae'])
 
@@ -189,8 +189,10 @@ def run_inference(checkpoint_path, args):
     pipe.dit = torch.compile(pipe.dit, mode="default")  # 编译 DIT 模块
     pipe.text_encoder = torch.compile(pipe.text_encoder, mode="default")  # 编译文本编码器
 
-    pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2'
-    decode_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2_decoded'
+    # pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2'
+    # decode_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2_decoded'
+    pth_dir = '/opt/data/private/yyx/code/DiffSynth-Studio-main/exp/train/sr_vacefull_datapth_cjy'
+    decode_dir = '/opt/data/private/yyx/code/DiffSynth-Studio-main/exp/train/sr_vacefull_datapth_cjy/decoded'
     # check_pth_keys(pth_dir)
     decode_pth_keys(pth_dir, decode_dir, pipe)
 
