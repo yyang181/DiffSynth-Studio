@@ -760,7 +760,11 @@ class VideoDataset_pt(torch.utils.data.Dataset):
             if input_dict is None:
                 warnings.warn(f"cannot load file {path}.")
                 return None
-            
+
+            # 以 0.2 的概率将 neg_prompt_emb 赋值给 prompt_emb
+            if np.random.rand() < 0.2 and "negative_context" in input_dict:
+                input_dict["context"] = input_dict["negative_context"]
+
             if 0:
                 ### 删除指定键
                 # keys_to_remove = ["num_frames", "height", "width", "rand_device", "cfg_scale", "tiled", "use_gradient_checkpointing", "use_gradient_checkpointing_offload", "cfg_merge", "vace_video", "vace_reference_image", "prompt"]

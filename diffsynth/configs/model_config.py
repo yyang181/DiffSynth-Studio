@@ -150,7 +150,7 @@ model_loader_configs = [
     (None, "9269f8db9040a9d860eaca435be61814", ["wan_video_dit_v1_vacefull"], [WanModel_v1_vacefull], "civitai"),
     (None, "91d96ce48118fdccceaf2798ec860d97", ["wan_video_dit_v1_vacefull"], [WanModel_v1_vacefull], "civitai"),
     (None, "9269f8db9040a9d860eaca435be61814", ["wan_video_dit_v2_vacefull"], [WanModel_v2_vacefull], "civitai"),
-    (None, "91d96ce48118fdccceaf2798ec860d97", ["wan_video_dit_v2_vacefull"], [WanModel_v2_vacefull], "civitai"),
+    (None, "ad2a95dcd11a2db44361bce98a25a455", ["wan_video_dit_v2_vacefull"], [WanModel_v2_vacefull], "civitai"),
 ]
 huggingface_model_loader_configs = [
     # These configs are provided for detecting model type automatically.

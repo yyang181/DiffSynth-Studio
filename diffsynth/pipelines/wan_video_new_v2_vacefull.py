@@ -925,7 +925,11 @@ class WanVideoUnit_VACE(PipelineUnit):
                 vace_mask_latents = torch.concat((torch.zeros_like(vace_mask_latents[:, :, :1]), vace_mask_latents), dim=2)
             
             vace_context = torch.concat((vace_video_latents, vace_mask_latents), dim=1)
-            return {"vace_context": vace_context, "vace_scale": vace_scale, "vace_video_latent": vace_video_latent, "vace_reference_latent": vace_reference_latent}
+
+            if vace_reference_image is not None:
+                return {"vace_context": vace_context, "vace_scale": vace_scale, "vace_video_latent": vace_video_latent, "vace_reference_latent": vace_reference_latent}
+            else:
+                return {"vace_context": vace_context, "vace_scale": vace_scale, "vace_video_latent": vace_video_latent}
         else:
             return {"vace_context": None, "vace_scale": vace_scale}
 
@@ -1163,6 +1167,7 @@ def model_fn_wan_video(
     vacefull_input, (f, h, w) = dit.vacefull_patchify(vace_video_latent)
     # print(x.shape, vacefull_input.shape, f, h, w);assert 0 torch.Size([1, 34320, 1536]) torch.Size([1, 34320, 1536]) 22 30 52
     x = x + vacefull_input
+    vace_context = None
     assert vace_context is None, "VACE context must be not provided when using VACEFull model."
     
     # Reference image
