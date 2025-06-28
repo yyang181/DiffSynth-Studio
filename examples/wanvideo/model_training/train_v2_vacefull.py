@@ -1,7 +1,7 @@
 import torch, os, json
 from diffsynth.pipelines.wan_video_new_v2_vacefull import ModelConfig
 from diffsynth.pipelines.wan_video_new_v2_vacefull import WanVideoPipeline_v2_vacefull as WanVideoPipeline 
-from diffsynth.trainers.utils import DiffusionTrainingModule, VideoDataset, VideoDataset_pt, SR_VideoDataset, ModelLogger, launch_training_task, wan_parser, launch_data_process_task
+from diffsynth.trainers.utils import DiffusionTrainingModule, VideoDataset, VideoDataset_pt, VideoDataset_pt_openvidhd, SR_VideoDataset, ModelLogger, launch_training_task, wan_parser, launch_data_process_task
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # realesrgan 
@@ -440,10 +440,17 @@ class WanTrainingModule(DiffusionTrainingModule):
         # print(inputs.keys());assert 0  # Debugging line to check inputs and models
 
         ### handle inputs
-        del inputs['vace_context']
-        inputs['latents'] = inputs['input_latents'][:,:,1:,:,:]
-        inputs['noise'] = inputs['noise'][:,:,1:,:,:]
-        inputs['input_latents'] = inputs['input_latents'][:,:,1:,:,:]
+        if 'vace_context' in inputs and inputs['input_latents'].shape[2] == 14:
+            # print("🔍 Warning: Detected VACE context (train_pt_v2), adjusting inputs for VACEFull training.")
+            del inputs['vace_context']
+            # inputs['latents'] = inputs['input_latents'][:,:,1:,:,:] # in training latents are not used
+            inputs['noise'] = inputs['noise'][:,:,1:,:,:]
+            inputs['input_latents'] = inputs['input_latents'][:,:,1:,:,:]
+        else:
+            # print("🔍 Warning: Detected VACE context (OpenViDHD), using original inputs.")
+            inputs['input_latents'] = inputs['input_latents'].to(dtype=self.pipe.torch_dtype, device=self.pipe.device)
+            inputs['noise'] = inputs['noise'].to(dtype=self.pipe.torch_dtype, device=self.pipe.device)
+            inputs['vace_video_latent'] = inputs['vace_video_latent'].to(dtype=self.pipe.torch_dtype, device=self.pipe.device)
 
         if 0:
             ### TODO so ugly, need to fix the inputs
@@ -477,7 +484,8 @@ if __name__ == "__main__":
     if not args.is_sr:
         dataset = VideoDataset(args=args) if args.use_data_pt is None else VideoDataset_pt(args=args)
     else:
-        dataset = SR_VideoDataset(args=args) if args.use_data_pt is None else VideoDataset_pt(args=args)
+        # dataset = SR_VideoDataset(args=args) if args.use_data_pt is None else VideoDataset_pt(args=args)
+        dataset = SR_VideoDataset(args=args) if args.use_data_pt is None else VideoDataset_pt_openvidhd(args=args)
 
     model = WanTrainingModule(
         model_paths=args.model_paths,

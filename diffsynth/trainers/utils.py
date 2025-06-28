@@ -790,7 +790,147 @@ class VideoDataset_pt(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.pth_paths) * self.repeat
 
+class VideoDataset_pt_openvidhd(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        args=None,
+    ):  
+        self.repeat = args.dataset_repeat
+        self.pth_dir = os.path.abspath(args.use_data_pt) if args is not None else None
+        # print(self.pth_dir) # 
+        
+        self.pth_paths = sorted(glob.glob(os.path.join(self.pth_dir, '**', '*.pth'), recursive=True))
+        # self.pth_paths = [f for f in os.listdir(self.pth_dir) if f.endswith(".pth") and not f.startswith(".")]
+        # # sort by the number in the file name
+        # self.pth_paths.sort(key=lambda x: int(x.split(".")[0]))
+        # print(self.pth_paths);assert 0 # ['data_cache/0.pth', 'data_cache/1.pth', ...]
 
+        self.pt_keys_to_remove = args.pt_keys_to_remove
+
+        self.args = args
+
+        if 0:
+            data_id = 1
+            pth_name = self.pth_paths[data_id % len(self.pth_paths)]
+            path = pth_name
+            input_dict = torch.load(path, map_location="cpu")
+            if input_dict is None:
+                warnings.warn(f"cannot load file {path}.")
+                return None
+
+            # # 删除指定键
+            # keys_to_remove = self.pt_keys_to_remove
+            # for key in keys_to_remove:
+            #     if key in input_dict:
+            #         del input_dict[key]
+
+            for key in input_dict.keys():
+                if isinstance(input_dict[key], torch.Tensor):
+                    print(key, input_dict[key].size())
+                elif isinstance(input_dict[key], dict):
+                    print(key, {k: v.size() if isinstance(v, torch.Tensor) else k for k, v in input_dict[key].items()})
+                else:
+                    print(key, input_dict[key].shape)
+
+            # latents torch.Size([16, 13, 64, 104])
+            # lq_latents torch.Size([16, 13, 64, 104])                                                                                                                                                                                   
+            # prompt_emb {'context': torch.Size([1, 512, 4096])}
+            # neg_prompt_emb {'context': torch.Size([1, 512, 4096])}                                                                                                                                                                     
+            # image_emb {}      
+
+            assert 0
+
+            # remove batch dim of keys
+            for key in input_dict.keys():
+                if isinstance(input_dict[key], torch.Tensor) and input_dict[key].dim() > 1:
+                    input_dict[key] = input_dict[key][0]
+                elif isinstance(input_dict[key], list):
+                    input_dict[key] = [item[0] for item in input_dict[key]]
+
+            # print size
+            for extra_input in input_dict.keys():
+                if extra_input not in ["input_video", "num_frames", "height", "width"]:
+                    if isinstance(input_dict[extra_input], list):
+                        print(f"Extra input {extra_input}: {[img.size for img in input_dict[extra_input]]}")
+                    elif isinstance(input_dict[extra_input], torch.Tensor):
+                        print(f"Extra input {extra_input}: {input_dict[extra_input].size()}")
+                    else:
+                        print(f"Extra input {extra_input}: {input_dict[extra_input]}")
+
+            assert 0
+            # Input video size: (832, 480)                                                                                 
+            # Input video num frames: 49                                                                                   
+            # Input video height: 480                                                                                                                                                                                                    
+            # Input video width: 832                                                                                       
+            # Extra input cfg_scale: 1                                                                                                                                                                                                   
+            # Extra input tiled: False            
+            # Extra input rand_device: cuda                                                                                                                                                                                              
+            # Extra input use_gradient_checkpointing: True                                                                 
+            # Extra input use_gradient_checkpointing_offload: True                                                                                                                                                                       
+            # Extra input cfg_merge: False   
+            # Extra input vace_scale: 1                                                                                                                                                                                                  
+            # Extra input vace_video: [(832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (8
+            # 32, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832,
+            # 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480), (832, 480)]
+            # Extra input vace_reference_image: <PIL.Image.Image image mode=RGB size=832x480 at 0x7F29FD9EC820>                                                                                                                          
+            # Extra input noise: torch.Size([1, 16, 14, 60, 104])                                                          
+            # Extra input latents: torch.Size([1, 16, 14, 60, 104]) 
+            # Extra input input_latents: torch.Size([1, 16, 14, 60, 104])
+            # Extra input vace_context: torch.Size([1, 96, 14, 60, 104])
+            # Extra input prompt: from sunset to night, a small town, light, house, river
+            # Extra input context: torch.Size([1, 512, 4096])
+
+
+    def __getitem__(self, data_id):
+        pth_name = self.pth_paths[data_id % len(self.pth_paths)]
+
+        if self.pth_dir is not None:
+            path = pth_name
+            input_dict = torch.load(path, map_location="cpu")
+            if input_dict is None:
+                warnings.warn(f"cannot load file {path}.")
+                return None
+
+            # 以 0.2 的概率将 neg_prompt_emb 赋值给 prompt_emb
+            if np.random.rand() < 0.2 and "neg_prompt_emb" in input_dict:
+                input_dict["context"] = input_dict["neg_prompt_emb"]["context"]
+            else:
+                input_dict["context"] = input_dict["prompt_emb"]["context"]
+
+            ### generate noise if not exists
+            if "noise" not in input_dict:
+                noise_shape = input_dict["latents"].shape
+                input_dict["noise"] = torch.randn(noise_shape, device=input_dict["latents"].device)
+            if "use_gradient_checkpointing" not in input_dict:
+                input_dict["use_gradient_checkpointing"] = self.args.use_gradient_checkpointing if hasattr(self.args, 'use_gradient_checkpointing') else False
+            if "use_gradient_checkpointing_offload" not in input_dict:
+                input_dict["use_gradient_checkpointing_offload"] = self.args.use_gradient_checkpointing_offload if hasattr(self.args, 'use_gradient_checkpointing_offload') else False
+
+
+            if 0:
+                ### 删除指定键
+                # keys_to_remove = ["num_frames", "height", "width", "rand_device", "cfg_scale", "tiled", "use_gradient_checkpointing", "use_gradient_checkpointing_offload", "cfg_merge", "vace_video", "vace_reference_image", "prompt"]
+                # keys_to_remove = ["rand_device", "vace_video", "vace_reference_image", "prompt", "use_gradient_checkpointing", "use_gradient_checkpointing_offload", "cfg_merge", "cfg_scale", "tiled", "vace_scale"]
+                keys_to_remove = self.pt_keys_to_remove
+                for key in keys_to_remove:
+                    if key in input_dict:
+                        del input_dict[key]
+
+                ### remove batch dim of keys
+                for key in input_dict.keys():
+                    if isinstance(input_dict[key], torch.Tensor) and input_dict[key].dim() > 1:
+                        input_dict[key] = input_dict[key][0]
+                    elif isinstance(input_dict[key], list):
+                        input_dict[key] = [item[0] for item in input_dict[key]]
+
+        # print(input_dict);assert 0
+
+        data = input_dict
+        return data
+    
+
+    def __len__(self):
+        return len(self.pth_paths) * self.repeat
 
 class DiffusionTrainingModule(torch.nn.Module):
     def __init__(self):
@@ -938,6 +1078,52 @@ def pt_data_collate_fn(batch):
         "vace_scale": vace_scale,
     }
 
+def pt_data_collate_fn_openvidhd(batch):
+    # print(batch[0].keys());assert 0 # dict_keys(['latents', 'lq_latents', 'prompt_emb', 'neg_prompt_emb', 'image_emb', 'context', 'noise', 'use_gradient_checkpointing', 'use_gradient_checkpointing_offload'])
+
+    # latents torch.Size([16, 13, 64, 104])
+    # lq_latents torch.Size([16, 13, 64, 104])                                                                                                                                                                                   
+    # prompt_emb {'context': torch.Size([1, 512, 4096])}
+    # neg_prompt_emb {'context': torch.Size([1, 512, 4096])}                                                                                                                                                                     
+    # image_emb {}       
+
+    tensor_size = batch[0]["latents"].size()
+    height = tensor_size[2]
+    width = tensor_size[3]
+    num_frames = (tensor_size[1] - 1) * 4 + 1
+    cfg_scale = 5.0
+    tiled = True
+    use_gradient_checkpointing = batch[0]["use_gradient_checkpointing"]
+    use_gradient_checkpointing_offload = batch[0]["use_gradient_checkpointing_offload"]
+    cfg_merge = False
+    vace_scale = 1.0
+
+    # rand_device = batch[0]["rand_device"]
+    # vace_reference_image = batch[0]["vace_reference_image"]
+    # prompt = [item["prompt"] for item in batch]
+
+    input_latents = torch.stack([item["latents"] for item in batch])
+    noise = torch.stack([item["noise"] for item in batch])
+    context = torch.stack([item["context"].squeeze(0) for item in batch])
+    vace_video_latent = torch.stack([item["lq_latents"] for item in batch])
+    
+    return {
+        "input_latents": input_latents,
+        "noise": noise,
+        # "latents": latents,
+        "vace_video_latent": vace_video_latent,
+        "context": context,
+        "height": height,
+        "width": width,
+        "num_frames": num_frames,
+        "cfg_scale": cfg_scale,
+        "tiled": tiled,
+        "use_gradient_checkpointing": use_gradient_checkpointing,
+        "use_gradient_checkpointing_offload": use_gradient_checkpointing_offload,
+        "cfg_merge": cfg_merge,
+        "vace_scale": vace_scale,
+    }
+
 def launch_training_task(
     dataset: torch.utils.data.Dataset,
     model: DiffusionTrainingModule,
@@ -951,7 +1137,8 @@ def launch_training_task(
 ):
     # dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=lambda x: x[0])
     # dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
-    dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=pt_data_collate_fn if use_data_pt is not None else lambda x: x[0])
+    # dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=pt_data_collate_fn if use_data_pt is not None else lambda x: x[0])
+    dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=args.batch_size, collate_fn=pt_data_collate_fn_openvidhd if use_data_pt is not None else lambda x: x[0])
 
 
     accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, log_with="swanlab" if args.use_swanlab else None,)
