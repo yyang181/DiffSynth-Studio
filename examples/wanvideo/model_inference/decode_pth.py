@@ -191,8 +191,11 @@ def run_inference(checkpoint_path, args):
 
     # pth_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2'
     # decode_dir = '/opt/data/private/yyx/data/OpenVidHD/train_pth_v2_decoded'
+    # pth_dir = '/opt/data/private/yyx/code/DiffSynth-Studio-main/exp/train/sr_vacefull_datapth_cjy'
+    # decode_dir = '/opt/data/private/yyx/code/DiffSynth-Studio-main/exp/train/sr_vacefull_datapth_cjy/decoded'
     pth_dir = '/opt/data/private/yyx/code/DiffSynth-Studio-main/exp/train/sr_vacefull_datapth_cjy'
     decode_dir = '/opt/data/private/yyx/code/DiffSynth-Studio-main/exp/train/sr_vacefull_datapth_cjy/decoded'
+    
     # check_pth_keys(pth_dir)
     decode_pth_keys(pth_dir, decode_dir, pipe)
 
